@@ -19,7 +19,8 @@ import java.time.YearMonth
  *   positive or negative.
  * - SWEEP_TO_SAVINGS: next month's carriedOver = 0 (positive leftover is dropped, overspend forgiven).
  * - When rollover is disabled every carriedOver is 0.
- * - Total savings = income - expenses of all closed months (rollover does not affect it).
+ * - Total savings = regular income - operating (regular + periodic) expenses of all closed months. Investments
+ *   and loans are neither earning nor spending, so they are excluded. Rollover does not affect it.
  */
 object RolloverCalculator {
 

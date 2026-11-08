@@ -3,10 +3,13 @@ package com.example.dhansutra.ui.transactions
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.dhansutra.domain.model.Category
+import com.example.dhansutra.domain.model.Loan
 import com.example.dhansutra.domain.model.TransactionFilter
 import com.example.dhansutra.domain.model.TransactionItem
+import com.example.dhansutra.domain.model.TransactionNature
 import com.example.dhansutra.domain.model.TransactionType
 import com.example.dhansutra.domain.repository.CategoryRepository
+import com.example.dhansutra.domain.repository.LoanRepository
 import com.example.dhansutra.domain.repository.TransactionRepository
 import com.example.dhansutra.util.MonthYear
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,6 +42,8 @@ data class TransactionFilters(
 data class TransactionsUiState(
     val filters: TransactionFilters = TransactionFilters(),
     val categories: List<Category> = emptyList(),
+    /** Existing people, to suggest in the loan section of the form. */
+    val loans: List<Loan> = emptyList(),
     val groups: List<DayGroup> = emptyList(),
     val isLoading: Boolean = true,
     /** Non-null while the add/edit sheet is open. */
@@ -51,6 +56,7 @@ data class TransactionsUiState(
 class TransactionsViewModel(
     private val categoryRepository: CategoryRepository,
     private val transactionRepository: TransactionRepository,
+    private val loanRepository: LoanRepository,
 ) : ViewModel() {
 
     private val filters = MutableStateFlow(TransactionFilters())
@@ -62,9 +68,10 @@ class TransactionsViewModel(
         filters,
         form,
         categoryRepository.observeAll(),
+        loanRepository.observeAll(),
         items,
-    ) { f, form, cats, list ->
-        TransactionsUiState(f, cats, groupByDay(list), isLoading = false, form = form)
+    ) { f, form, cats, loans, list ->
+        TransactionsUiState(f, cats, loans, groupByDay(list), isLoading = false, form = form)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TransactionsUiState())
 
     // --- filters ---
@@ -76,7 +83,7 @@ class TransactionsViewModel(
     // --- form ---
     fun startAdd() {
         val first = uiState.value.categories.firstOrNull()
-        form.value = TransactionForm(categoryId = first?.id)
+        form.value = first?.let { TransactionForm().withCategory(it) } ?: TransactionForm()
     }
 
     fun startEdit(item: TransactionItem) {
@@ -97,7 +104,12 @@ class TransactionsViewModel(
             return
         }
         viewModelScope.launch {
-            transactionRepository.save(transaction)
+            val loanId = if (transaction.nature == TransactionNature.LOAN) {
+                loanRepository.getOrCreate(current.counterparty, current.loanDirection)
+            } else {
+                null
+            }
+            transactionRepository.save(transaction.copy(loanId = loanId))
             form.value = null
         }
     }

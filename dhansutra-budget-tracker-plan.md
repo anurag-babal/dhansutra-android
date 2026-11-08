@@ -2,7 +2,7 @@
 
 Source requirements: `PROMPT.md` (since deleted by the user; its content is captured in this plan)
 
-**Build note:** Android SDK is at `/opt/homebrew/share/android-commandlinetools` (`local.properties`, git-ignored). The wrapper download times out, so compile with `/tmp/gradle-9.6.0/bin/gradle :app:compileDebugKotlin` (Gradle 9.6.0, checksum-verified).
+**Build note:** Android SDK is at `/opt/homebrew/share/android-commandlinetools` (`local.properties`, git-ignored). the wrapper works when run as `sh ./gradlew ...` (it is not marked executable), e.g. `sh ./gradlew :app:testDebugUnitTest`.
 
 ## Top-Level Overview
 
@@ -42,7 +42,10 @@ util/ (CurrencyFormatter, MonthYear helpers)
 6. **Savings pool** has no entity in the spec → derive it rather than add a table. **Confirmed by user:** Overall Savings = Σ swept surplus of all closed months (Sweep categories) + all-time Σ (income − expenses) of closed months. (Closed month = any month before the current month.) Implementation must avoid double counting: a swept surplus is by definition unspent budget and is not an income/expense transaction, so the two terms are independent; document this in the README.
 7. **Rollover global toggle** on Dashboard enables/disables month-to-month rollover entirely (when off, carriedOver = 0 and no sweeping). Persisted in `SharedPreferences` (avoids adding DataStore), exposed as a `Flow`/`StateFlow`.
 8. Month rollover is computed on app open for any months between the last processed month and the current month (idempotent, no background worker needed for offline personal use).
-9. Spent = Σ EXPENSE transactions in the month for that category; Income total = Σ INCOME transactions in the month.
+9. Every transaction has a direction (`type`: EXPENSE / INCOME) and a **nature** (`TransactionNature`): `REGULAR_OPERATING`, `PERIODIC_ONE_TIME`, `INVESTMENT`, `LOAN`. See "Post-delivery change: transaction nature" below.
+   - Spent (budgets, rollover, category breakdown, trend) = Σ EXPENSE with nature `REGULAR_OPERATING` for the category/month.
+   - Income total = Σ INCOME with nature `REGULAR_OPERATING`.
+   - Cash balance = all-time Σ INCOME − Σ EXPENSE of **every** nature (matches the bank).
 
 ---
 
@@ -70,14 +73,14 @@ util/ (CurrencyFormatter, MonthYear helpers)
 - **Todo List:**
   1. `RolloverType` enum (`CARRY_FORWARD`, `SWEEP_TO_SAVINGS`) and `TransactionType` enum (`EXPENSE`, `INCOME`) with `TypeConverter`s.
   2. `CategoryEntity` (`id`, `name`, `iconName`, `defaultBudget`, `rolloverType`).
-  3. `TransactionEntity` (`id`, `amount`, `categoryId`, `dateMillis`, `type`, `notes`) with FK to category and indexes on `categoryId` and `dateMillis`. Decide FK delete behaviour (restrict delete of categories having transactions; archive/soft-delete is out of scope).
+  3. `TransactionEntity` (`id`, `amount`, `categoryId`, `dateMillis`, `type`, `notes`, plus `nature`, `coveredMonths`, `loanId` added in v2/v3) with FK to category and indexes on `categoryId` and `dateMillis`. Decide FK delete behaviour (restrict delete of categories having transactions; archive/soft-delete is out of scope).
   4. `MonthlyBudgetEntity` (`id`, `monthYear`, `categoryId`, `allocatedAmount`, `carriedOverAmount`) with FK + unique index `(monthYear, categoryId)`.
   5. DAOs:
      - `CategoryDao`: observe all, insert/update/delete, get by id.
      - `TransactionDao`: insert/update/delete, observe by month range, filter by category/date range, text search over notes and category name (join), sum by category per range, sum income/expense per range, per-month totals for trend.
      - `MonthlyBudgetDao`: observe by month, upsert, get by month+category, list of distinct months.
   6. Query result POJOs (e.g. `CategorySpent`, `MonthTotal`, `TransactionWithCategory`).
-  7. `AppDatabase` (version 1, export schema) and a `RoomDatabase.Callback` seeding default categories (Rent/EMI, Groceries, Utilities, Dining & Swiggy, Shopping) with icon names and sample default budgets.
+  7. `AppDatabase` (version 1 originally; now **version 3** with `MIGRATION_1_2` and `MIGRATION_2_3`; export schema) and a `RoomDatabase.Callback` seeding default categories (Rent/EMI, Groceries, Utilities, Dining & Swiggy, Shopping) with icon names and sample default budgets.
   8. Wire database + DAOs into `AppContainer`.
   9. Instrumented in-memory Room tests for DAO queries (filters, search, sums, unique index).
 - **Relevant Context:** New package `data/local/`; test dir `app/src/androidTest/java/com/example/dhansutra/`.
@@ -205,3 +208,23 @@ Phase 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 (each phase is independe
 ## Post-delivery change: simplified savings & rollover rows
 - Total savings is now simply income - expenses of closed months (no swept-surplus term, which double counted unspent budget). Sweep only resets the next month's budget.
 - Each category gets budget rows from ITS OWN first month (earliest of its budget rows and its expenses, else the current month) through the current month, so unused budgets still carry/sweep but a category created in November gets no October row. Categories with no budget, carry-over or spending in a month are hidden from the Planning/Dashboard lists (e.g. "Salary & Income").
+
+## Post-delivery change: transaction nature (periodic, investments, loans)
+
+Cash direction (`type`) is separate from what the money *is* (`nature`). Every nature moves the real cash balance; only some count as income / spending.
+
+| Event | type | nature | Cash | Income / Regular spent | Budgets |
+|---|---|---|---|---|---|
+| Groceries, salary | EXPENSE / INCOME | REGULAR_OPERATING | yes | yes | yes (expenses) |
+| Gym 6 months, annual insurance | EXPENSE | PERIODIC_ONE_TIME (+ `coveredMonths` 3/6/12) | yes | "Periodic payments" line, counts toward surplus/savings | no |
+| SIP / NPS contribution | EXPENSE | INVESTMENT | yes | no (shown as "Invested") | no |
+| SIP / NPS redemption | INCOME | INVESTMENT | yes | no | no |
+| Lend / repay a borrowed amount | EXPENSE | LOAN | yes | no | no |
+| Borrow / get repaid | INCOME | LOAN | yes | no | no |
+
+- **Schema (Room v3):** `transactions.nature` (was `expenseType` in v2), `transactions.coveredMonths`, `transactions.loanId` (FK → `loans`, RESTRICT), `categories.nature` (default nature pre-selected in the entry form), new `loans` table (`id`, `counterparty`, `direction` LENT/BORROWED). `MIGRATION_2_3` renames the column, adds the table/columns and inserts the categories "SIP / Mutual Funds", "NPS" (INVESTMENT) and "Loans" (LOAN) for existing installs; new installs get them from `SeedCallback`.
+- **Loans:** a loan is one person + direction (`LoanRepository.getOrCreate` reuses it, case-insensitive). Outstanding = net of its linked transactions (LENT: lent − received back; BORROWED: borrowed − repaid), never below 0.
+- **Derived dashboard figures** (`DashboardSummary`): cash balance; invested total (net contributions, at cost); owed to you; you owe; net worth = cash + invested + owed to you − you owe; this month: income, regular spending, periodic payments, invested, surplus (= income − regular − periodic); savings in past months (regular income − regular and periodic expenses; investments and loans excluded).
+- **Entry sheet:** direction (Expense/Income) + nature chips (Regular, Periodic / One-time [expenses only], Investment, Loan). Periodic shows a duration dropdown; Loan shows I lent / I borrowed, a person field and suggestions. Choosing an Investment/Loan category pre-selects its nature.
+- **Dashboard (redesigned):** hero card (cash balance, net worth, Invested / Owed to you / You owe) → "This month" ledger → Budgets (regular spend only) → collapsible Periodic card → collapsible Lending & borrowing card → rollover card.
+- **Not done / ideas:** per-instrument invested balances and gains/valuation (invested is shown at cost); editing or closing a loan from its own screen; loan interest (log it as a regular expense).

@@ -1,11 +1,13 @@
 package com.example.dhansutra.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Flight
 import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.Handshake
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LocalHospital
 import androidx.compose.material.icons.rounded.Movie
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.ShoppingCart
+import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -40,6 +43,9 @@ object CategoryIcons {
         "pets" to Icons.Rounded.Pets,
         "fitness" to Icons.Rounded.FitnessCenter,
         "receipt" to Icons.Rounded.Receipt,
+        "trending_up" to Icons.Rounded.TrendingUp,
+        "account_balance" to Icons.Rounded.AccountBalance,
+        "handshake" to Icons.Rounded.Handshake,
         "category" to Icons.Rounded.Category,
     )
 

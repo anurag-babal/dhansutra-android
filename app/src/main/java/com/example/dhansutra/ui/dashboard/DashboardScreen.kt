@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -35,6 +36,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.dhansutra.domain.model.BudgetItem
 import com.example.dhansutra.domain.model.Category
 import com.example.dhansutra.domain.model.DashboardSummary
+import com.example.dhansutra.domain.model.Loan
+import com.example.dhansutra.domain.model.LoanBalance
+import com.example.dhansutra.domain.model.LoanDirection
 import com.example.dhansutra.domain.model.PeriodicExpenseItem
 import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.RolloverType
@@ -50,7 +54,7 @@ import kotlin.math.roundToInt
 @Composable
 fun DashboardRoute() {
     val vm = appViewModel {
-        DashboardViewModel(it.observeDashboardSummary, it.observeMonthlyBudget, it.observePeriodicExpenses, it.settingsRepository)
+        DashboardViewModel(it.observeDashboardSummary, it.observeMonthlyBudget, it.observePeriodicExpenses, it.observeOpenLoans, it.settingsRepository)
     }
     val state by vm.uiState.collectAsStateWithLifecycle()
     DashboardScreen(state, vm::setRolloverEnabled)
@@ -61,16 +65,12 @@ fun DashboardScreen(state: DashboardUiState, onRolloverToggle: (Boolean) -> Unit
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Text(MonthYear.label(state.month), style = MaterialTheme.typography.headlineSmall)
-        }
-        item { CashBalanceCard(state.summary.cashBalance) }
-        item { SummaryCards(state.summary) }
-        item {
-            Text("Operating budget (regular expenses)", style = MaterialTheme.typography.titleMedium)
-        }
+        item { Text(MonthYear.label(state.month), style = MaterialTheme.typography.headlineSmall) }
+        item { BalanceCard(state.summary) }
+        item { MonthCard(state.summary) }
+        item { Text("Budgets", style = MaterialTheme.typography.titleMedium) }
         if (state.budgets.isEmpty()) {
             item {
                 Text(
@@ -84,29 +84,126 @@ fun DashboardScreen(state: DashboardUiState, onRolloverToggle: (Boolean) -> Unit
         if (state.periodic.items.isNotEmpty()) {
             item { PeriodicExpensesCard(state.periodic) }
         }
+        if (state.openLoans.isNotEmpty()) {
+            item { LoansCard(state.openLoans) }
+        }
         item { RolloverCard(state, onRolloverToggle) }
     }
 }
 
-/** Header card: real bank balance (all income minus ALL expenses, periodic included). */
+/** Hero card: the real bank balance, net worth, and the three positions that sit outside it. */
 @Composable
-private fun CashBalanceCard(cashBalance: Long) {
+private fun BalanceCard(summary: DashboardSummary) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-        Column(Modifier.padding(16.dp)) {
-            Text("True cash balance", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            Text(
-                CurrencyFormatter.format(cashBalance),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (cashBalance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer,
-                maxLines = 1,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Text(
-                "Includes periodic payments",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column {
+                Text("Cash balance", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    CurrencyFormatter.format(summary.cashBalance),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (summary.cashBalance < 0) MaterialTheme.colorScheme.error else Color.Unspecified,
+                    maxLines = 1,
+                )
+                Text(
+                    "Net worth ${CurrencyFormatter.format(summary.netWorth, false)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Row(Modifier.fillMaxWidth()) {
+                Position("Invested", summary.investedTotal, Modifier.weight(1f))
+                Position("Owed to you", summary.owedToYou, Modifier.weight(1f))
+                Position("You owe", summary.youOwe, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Position(label: String, amount: Long, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(
+            CurrencyFormatter.format(amount, false),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
+/** This month as a short ledger: what came in, what went out, and what was left. */
+@Composable
+private fun MonthCard(summary: DashboardSummary) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("This month", style = MaterialTheme.typography.titleMedium)
+            LedgerRow("Income", summary.income)
+            LedgerRow("Regular spending", summary.spent)
+            if (summary.periodicSpent != 0L) LedgerRow("Periodic payments", summary.periodicSpent)
+            if (summary.invested != 0L) LedgerRow("Invested (not spending)", summary.invested)
+            HorizontalDivider()
+            LedgerRow("Surplus", summary.surplus, emphasis = true, negative = summary.surplus < 0)
+            LedgerRow("Savings in past months", summary.savings, negative = summary.savings < 0)
+        }
+    }
+}
+
+@Composable
+private fun LedgerRow(label: String, amount: Long, emphasis: Boolean = false, negative: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (emphasis) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (emphasis) FontWeight.SemiBold else null,
+        )
+        Text(
+            CurrencyFormatter.format(amount),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (emphasis) FontWeight.SemiBold else null,
+            color = if (negative) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Collapsible list of people with an outstanding balance. */
+@Composable
+private fun LoansCard(loans: List<LoanBalance>) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Lending & borrowing", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${loans.size} open",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                )
+            }
+            if (expanded) {
+                loans.forEach { balance ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(balance.loan.counterparty, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text(
+                                if (balance.loan.direction == LoanDirection.LENT) "Owes you" else "You owe",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(CurrencyFormatter.format(balance.outstanding), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
         }
     }
 }
@@ -158,42 +255,6 @@ private fun PeriodicExpenseRow(item: PeriodicExpenseItem) {
                     if (item.coveredMonths == 1) "" else "s")
             },
         )
-    }
-}
-
-@Composable
-private fun SummaryCards(summary: DashboardSummary) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard("Monthly income", CurrencyFormatter.format(summary.income), Modifier.weight(1f))
-            StatCard("Regular spent", CurrencyFormatter.format(summary.spent), Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard(
-                "Remaining surplus",
-                CurrencyFormatter.format(summary.surplus),
-                Modifier.weight(1f),
-                negative = summary.surplus < 0,
-            )
-            StatCard("Total savings", CurrencyFormatter.format(summary.savings), Modifier.weight(1f), negative = summary.savings < 0)
-        }
-    }
-}
-
-@Composable
-private fun StatCard(title: String, value: String, modifier: Modifier = Modifier, negative: Boolean = false) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-            Text(
-                value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (negative) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSecondaryContainer,
-                maxLines = 1,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
     }
 }
 
@@ -267,11 +328,19 @@ private val previewState = DashboardUiState(
         savings = 12_345_600,
         periodicSpent = 1_200_000,
         cashBalance = 16_375_600,
+        invested = 500_000,
+        investedTotal = 6_000_000,
+        owedToYou = 1_000_000,
+        youOwe = 250_000,
     ),
     periodic = PeriodicExpenseSummary(
         total = 1_200_000,
         monthlyEquivalent = 200_000,
         items = listOf(PeriodicExpenseItem(1, "Shopping", "shopping_bag", "Gym membership", 0L, 1_200_000, 6)),
+    ),
+    openLoans = listOf(
+        LoanBalance(Loan(1, "Rahul", LoanDirection.LENT), 1_000_000),
+        LoanBalance(Loan(2, "Amit", LoanDirection.BORROWED), 250_000),
     ),
     budgets = listOf(
         BudgetItem(cat(1, "Rent/EMI", "home", RolloverType.CARRY_FORWARD), 1_500_000, 0, 1_500_000),

@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.example.dhansutra.domain.model.ExpenseType
+import com.example.dhansutra.domain.model.TransactionNature
 import com.example.dhansutra.domain.model.TransactionType
 
 @Entity(
@@ -17,8 +17,14 @@ import com.example.dhansutra.domain.model.TransactionType
             childColumns = ["categoryId"],
             onDelete = ForeignKey.RESTRICT,
         ),
+        ForeignKey(
+            entity = LoanEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["loanId"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
     ],
-    indices = [Index("categoryId"), Index("dateMillis")],
+    indices = [Index("categoryId"), Index("dateMillis"), Index("loanId")],
 )
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -28,6 +34,8 @@ data class TransactionEntity(
     val dateMillis: Long,
     val type: TransactionType,
     val notes: String = "",
-    @ColumnInfo(defaultValue = "REGULAR_OPERATING") val expenseType: ExpenseType = ExpenseType.REGULAR_OPERATING,
+    @ColumnInfo(defaultValue = "REGULAR_OPERATING") val nature: TransactionNature = TransactionNature.REGULAR_OPERATING,
     @ColumnInfo(defaultValue = "1") val coveredMonths: Int = 1,
+    /** Set for LOAN transactions. */
+    val loanId: Long? = null,
 )

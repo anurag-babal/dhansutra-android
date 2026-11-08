@@ -2,13 +2,16 @@ package com.example.dhansutra.domain.repository
 
 import com.example.dhansutra.domain.model.BudgetEntry
 import com.example.dhansutra.domain.model.Category
-import com.example.dhansutra.domain.model.ExpenseType
+import com.example.dhansutra.domain.model.Loan
+import com.example.dhansutra.domain.model.LoanBalance
+import com.example.dhansutra.domain.model.LoanDirection
 import com.example.dhansutra.domain.model.MonthCategorySpend
 import com.example.dhansutra.domain.model.MonthTotals
 import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.Transaction
 import com.example.dhansutra.domain.model.TransactionFilter
 import com.example.dhansutra.domain.model.TransactionItem
+import com.example.dhansutra.domain.model.TransactionNature
 import com.example.dhansutra.domain.model.TransactionType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,43 +32,46 @@ interface TransactionRepository {
     suspend fun save(transaction: Transaction): Long
     suspend fun delete(id: Long)
 
-    /** Total for [type] in the range. [expenseType] null = all expense types (real cash view). */
+    /** Total for [type] in the range. [nature] null = all expense types (real cash view). */
     fun observeTotal(
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
-        expenseType: ExpenseType? = null,
+        nature: TransactionNature? = null,
     ): Flow<Long>
 
     suspend fun getTotal(
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
-        expenseType: ExpenseType? = null,
+        nature: TransactionNature? = null,
     ): Long
 
-    /** categoryId -> total, for [type] in the range. [expenseType] null = all expense types. */
+    /** categoryId -> total, for [type] in the range. [nature] null = all expense types. */
     fun observeTotalsByCategory(
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
-        expenseType: ExpenseType? = null,
+        nature: TransactionNature? = null,
     ): Flow<Map<Long, Long>>
 
     suspend fun getTotalsByCategory(
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
-        expenseType: ExpenseType? = null,
+        nature: TransactionNature? = null,
     ): Map<Long, Long>
 
-    /** Per-month income / all expenses / periodic expenses. */
+    /** Net amount invested (contributions - redemptions) in the range. */
+    fun observeNetInvested(startMillis: Long, endMillis: Long): Flow<Long>
+
+    /** Per-month regular income / operating expenses / periodic expenses / net invested. */
     fun observeMonthTotals(startMillis: Long): Flow<List<MonthTotals>>
 
-    /** Per-month, per-category expenses. [expenseType] null = all expense types. */
+    /** Per-month, per-category expenses. [nature] null = all expense types. */
     fun observeMonthCategoryExpenses(
         endMillis: Long,
-        expenseType: ExpenseType? = null,
+        nature: TransactionNature? = null,
     ): Flow<List<MonthCategorySpend>>
 
     /** Real cash balance: all-time income minus ALL expenses (regular + periodic). */
@@ -73,6 +79,15 @@ interface TransactionRepository {
 
     /** Periodic / one-time expenses paid in the range, with their total and average monthly equivalent. */
     fun observePeriodicExpenses(startMillis: Long, endMillis: Long): Flow<PeriodicExpenseSummary>
+}
+
+interface LoanRepository {
+    /** Every loan with what is still outstanding on it. */
+    fun observeBalances(): Flow<List<LoanBalance>>
+    fun observeAll(): Flow<List<Loan>>
+
+    /** Returns the existing loan with this person and direction, or creates it. */
+    suspend fun getOrCreate(counterparty: String, direction: LoanDirection): Long
 }
 
 interface BudgetRepository {

@@ -4,16 +4,19 @@ import android.content.Context
 import com.example.dhansutra.data.local.AppDatabase
 import com.example.dhansutra.data.repository.BudgetRepositoryImpl
 import com.example.dhansutra.data.repository.CategoryRepositoryImpl
+import com.example.dhansutra.data.repository.LoanRepositoryImpl
 import com.example.dhansutra.data.repository.SharedPrefsSettingsRepository
 import com.example.dhansutra.data.repository.TransactionRepositoryImpl
 import com.example.dhansutra.domain.repository.BudgetRepository
 import com.example.dhansutra.domain.repository.CategoryRepository
+import com.example.dhansutra.domain.repository.LoanRepository
 import com.example.dhansutra.domain.repository.SettingsRepository
 import com.example.dhansutra.domain.repository.TransactionRepository
 import com.example.dhansutra.domain.usecase.ObserveCategoryBreakdown
 import com.example.dhansutra.domain.usecase.ObserveDashboardSummary
 import com.example.dhansutra.domain.usecase.ObserveMonthlyBudget
 import com.example.dhansutra.domain.usecase.ObserveMonthlyTrend
+import com.example.dhansutra.domain.usecase.ObserveOpenLoans
 import com.example.dhansutra.domain.usecase.ObservePeriodicExpenses
 import com.example.dhansutra.domain.usecase.RolloverManager
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +34,7 @@ class AppContainer(context: Context) {
         CategoryRepositoryImpl(database.categoryDao(), database.transactionDao())
     }
     val transactionRepository: TransactionRepository by lazy { TransactionRepositoryImpl(database.transactionDao()) }
+    val loanRepository: LoanRepository by lazy { LoanRepositoryImpl(database.loanDao()) }
     val budgetRepository: BudgetRepository by lazy { BudgetRepositoryImpl(database.monthlyBudgetDao()) }
     val settingsRepository: SettingsRepository by lazy { SharedPrefsSettingsRepository(appContext) }
 
@@ -39,10 +43,11 @@ class AppContainer(context: Context) {
     }
 
     val observeMonthlyBudget by lazy { ObserveMonthlyBudget(categoryRepository, budgetRepository, transactionRepository) }
-    val observeDashboardSummary by lazy { ObserveDashboardSummary(transactionRepository) }
+    val observeDashboardSummary by lazy { ObserveDashboardSummary(transactionRepository, loanRepository) }
     val observeCategoryBreakdown by lazy { ObserveCategoryBreakdown(categoryRepository, transactionRepository) }
     val observeMonthlyTrend by lazy { ObserveMonthlyTrend(transactionRepository) }
     val observePeriodicExpenses by lazy { ObservePeriodicExpenses(transactionRepository) }
+    val observeOpenLoans by lazy { ObserveOpenLoans(loanRepository) }
 
     /** Starts background work (budget row maintenance). Called once from the Application. */
     fun start() {

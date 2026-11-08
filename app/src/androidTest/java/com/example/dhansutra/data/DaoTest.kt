@@ -6,8 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.dhansutra.data.local.AppDatabase
 import com.example.dhansutra.data.local.entity.CategoryEntity
+import com.example.dhansutra.data.local.entity.LoanEntity
 import com.example.dhansutra.data.local.entity.MonthlyBudgetEntity
-import com.example.dhansutra.domain.model.ExpenseType
+import com.example.dhansutra.domain.model.TransactionNature
+import com.example.dhansutra.domain.model.LoanDirection
 import com.example.dhansutra.domain.model.RolloverType
 import com.example.dhansutra.data.local.entity.TransactionEntity
 import com.example.dhansutra.domain.model.TransactionType
@@ -49,12 +51,12 @@ class DaoTest {
         date: Long,
         type: TransactionType,
         notes: String = "",
-        expenseType: ExpenseType = ExpenseType.REGULAR_OPERATING,
+        nature: TransactionNature = TransactionNature.REGULAR_OPERATING,
         coveredMonths: Int = 1,
     ) = db.transactionDao().insert(
         TransactionEntity(
             amount = amount, categoryId = cat, dateMillis = date, type = type, notes = notes,
-            expenseType = expenseType, coveredMonths = coveredMonths,
+            nature = nature, coveredMonths = coveredMonths,
         ),
     )
 
@@ -94,22 +96,43 @@ class DaoTest {
     @Test
     fun periodicExpensesAreSeparatedFromRegularButCountInCashBalance() = runBlocking {
         tx(10, groceries, 1_000, TransactionType.EXPENSE)
-        tx(1_200, dining, 2_000, TransactionType.EXPENSE, "Gym", ExpenseType.PERIODIC_ONE_TIME, 6)
+        tx(1_200, dining, 2_000, TransactionType.EXPENSE, "Gym", TransactionNature.PERIODIC_ONE_TIME, 6)
         tx(2_000, groceries, 2_000, TransactionType.INCOME)
         val dao = db.transactionDao()
 
-        assertEquals(10, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, ExpenseType.REGULAR_OPERATING))
-        assertEquals(1_200, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, ExpenseType.PERIODIC_ONE_TIME))
+        assertEquals(10, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, TransactionNature.REGULAR_OPERATING))
+        assertEquals(1_200, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, TransactionNature.PERIODIC_ONE_TIME))
         assertEquals(1_210, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, null))
         assertEquals(1_210, dao.observeAllTimeTotal(TransactionType.EXPENSE).first())
         assertEquals(2_000, dao.observeAllTimeTotal(TransactionType.INCOME).first())
 
-        val regularByCat = dao.getTotalsByCategory(TransactionType.EXPENSE, 0, 10_000, ExpenseType.REGULAR_OPERATING)
+        val regularByCat = dao.getTotalsByCategory(TransactionType.EXPENSE, 0, 10_000, TransactionNature.REGULAR_OPERATING)
         assertEquals(listOf(groceries), regularByCat.map { it.categoryId })
 
-        val periodic = dao.observeByExpenseType(ExpenseType.PERIODIC_ONE_TIME, 0, 10_000).first().single()
+        val periodic = dao.observeByNature(TransactionNature.PERIODIC_ONE_TIME, 0, 10_000).first().single()
         assertEquals("Gym", periodic.transaction.notes)
         assertEquals(6, periodic.transaction.coveredMonths)
+    }
+
+    @Test
+    fun investmentsAreNetAndLoansTrackOutstanding() = runBlocking {
+        val loanDao = db.loanDao()
+        val rahul = loanDao.insert(LoanEntity(counterparty = "Rahul", direction = LoanDirection.LENT))
+        suspend fun loanTx(amount: Long, type: TransactionType) = db.transactionDao().insert(
+            TransactionEntity(
+                amount = amount, categoryId = groceries, dateMillis = 1_000, type = type,
+                nature = TransactionNature.LOAN, loanId = rahul,
+            ),
+        )
+        loanTx(1_000, TransactionType.EXPENSE) // lent
+        loanTx(400, TransactionType.INCOME)    // paid back
+        tx(500, groceries, 1_000, TransactionType.EXPENSE, nature = TransactionNature.INVESTMENT)
+        tx(100, groceries, 1_000, TransactionType.INCOME, nature = TransactionNature.INVESTMENT)
+
+        assertEquals(600L, loanDao.observeNets().first().single().net)
+        assertEquals(400L, db.transactionDao().observeNetOutflow(TransactionNature.INVESTMENT, 0, Long.MAX_VALUE).first())
+        assertEquals("Rahul", loanDao.find("rahul", LoanDirection.LENT)?.counterparty)
+        assertEquals("Rahul", db.transactionDao().observeFiltered(0, 10_000, null, "rahu").first().first().loanName)
     }
 
     @Test

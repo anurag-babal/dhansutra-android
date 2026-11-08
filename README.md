@@ -10,9 +10,9 @@ MVVM + Clean Architecture with manual dependency injection.
 
 | Tab | What it does |
 | --- | --- |
-| **Dashboard** | Monthly income, spent so far, remaining surplus, total savings; budget-vs-actual progress bar per category; global rollover on/off switch with a summary of balances carried into the month. |
+| **Dashboard** | Cash balance and net worth (with invested, owed to you and you owe); a "This month" ledger (income, regular spending, periodic payments, invested, surplus); budget-vs-actual progress per category (regular spending only); collapsible periodic-payment and lending/borrowing cards; global rollover switch. |
 | **Planning** | Per-category table: Budget \| Spent \| Left \| Rollover mode. Edit the month's budget, rollover mode (Carry forward / Sweep to savings), name and icon; add or delete categories (deletion is blocked while a category has transactions). |
-| **Transactions** | FAB to add; month selector, category filter, date-range filter and text search over notes and category names; tap a row to edit or delete. Entry is a Material 3 bottom sheet (amount, date picker, category dropdown, Expense/Income, notes). |
+| **Transactions** | FAB to add; month selector, category filter, date-range filter and text search over notes and category names; tap a row to edit or delete. Entry is a Material 3 bottom sheet (amount, date picker, category dropdown, Expense/Income, a nature selector - Regular, Periodic / One-time, Investment, Loan - and notes). Periodic asks for a duration; Loan asks who it is with and whether you lent or borrowed). |
 | **Analytics** | Donut chart of the month's spending by category and a 6-month spending trend line chart, both drawn with Compose Canvas. |
 
 ## Rollover & savings rules
@@ -23,7 +23,8 @@ MVVM + Clean Architecture with manual dependency injection.
 * **Carry Forward:** next month's `carriedOverAmount` = this month's `allocated + carriedOver - spent` (positive or negative).
 * **Sweep to Savings:** next month starts fresh (carry-over 0); a leftover is dropped and an overspend is forgiven.
 * **Rollover switch off:** every carry-over is 0.
-* **Total savings** = income - expenses summed over all closed months (any month before the current one). It reflects the money actually kept and does not depend on rollover or budgets.
+* **Total savings** = regular income - operating (regular + periodic) expenses summed over all closed months (any month before the current one). It does not depend on rollover or budgets.
+* **Transaction nature:** only *regular* expenses count against budgets. *Periodic* lump sums, *investments* (SIP/NPS) and *loans* (lent, borrowed, repayments) all move the cash balance, but investments and loans are neither income nor spending. Net worth = cash + invested (at cost) + owed to you - you owe.
 * All money is stored as `Long` **paise** and displayed with Indian digit grouping (₹1,23,456.00).
 
 ## Project structure

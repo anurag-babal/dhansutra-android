@@ -97,6 +97,14 @@ class RolloverCalculatorTest {
     }
 
     @Test
+    fun savingsIgnoreInvestments() {
+        // MonthTotals.spent/income already exclude investments and loans, `invested` is informational.
+        val totals = listOf(MonthTotals("2026-10", spent = 300, income = 1000, periodicSpent = 100, invested = 500))
+        assertEquals(700L, RolloverCalculator.computeSavings(totals, nov))
+        assertEquals(200L, totals.single().operatingSpent)
+    }
+
+    @Test
     fun savingsCanBeNegativeAndEmptyIsZero() {
         assertEquals(-300L, RolloverCalculator.computeSavings(listOf(MonthTotals("2026-10", 500, 200)), nov))
         assertEquals(0L, RolloverCalculator.computeSavings(emptyList(), nov))

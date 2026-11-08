@@ -1,6 +1,6 @@
 package com.example.dhansutra.domain.usecase
 
-import com.example.dhansutra.domain.model.ExpenseType
+import com.example.dhansutra.domain.model.TransactionNature
 import com.example.dhansutra.domain.repository.BudgetRepository
 import com.example.dhansutra.domain.repository.CategoryRepository
 import com.example.dhansutra.domain.repository.SettingsRepository
@@ -31,7 +31,7 @@ class RolloverManager(
         scope.launch {
             combine(
                 categories.observeAll(),
-                transactions.observeMonthCategoryExpenses(Long.MAX_VALUE, ExpenseType.REGULAR_OPERATING),
+                transactions.observeMonthCategoryExpenses(Long.MAX_VALUE, TransactionNature.REGULAR_OPERATING),
                 settings.rolloverEnabled,
             ) { _, _, _ -> }.collect { recalculate() }
         }
@@ -40,7 +40,7 @@ class RolloverManager(
     suspend fun recalculate() = mutex.withLock {
         val cats = categories.getAll()
         val existing = budgets.observeAll().first()
-        val spend = transactions.observeMonthCategoryExpenses(Long.MAX_VALUE, ExpenseType.REGULAR_OPERATING).first()
+        val spend = transactions.observeMonthCategoryExpenses(Long.MAX_VALUE, TransactionNature.REGULAR_OPERATING).first()
         val desired = RolloverCalculator.computeBudgets(
             categories = cats,
             existing = existing,

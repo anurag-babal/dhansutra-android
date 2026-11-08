@@ -71,7 +71,7 @@ private val shortDate = DateTimeFormatter.ofPattern("dd MMM")
 
 @Composable
 fun TransactionsRoute() {
-    val vm = appViewModel { TransactionsViewModel(it.categoryRepository, it.transactionRepository) }
+    val vm = appViewModel { TransactionsViewModel(it.categoryRepository, it.transactionRepository, it.loanRepository) }
     val state by vm.uiState.collectAsStateWithLifecycle()
     TransactionsScreen(
         state = state,
@@ -207,6 +207,7 @@ fun TransactionsScreen(
         TransactionEntryBottomSheet(
             form = form,
             categories = state.categories,
+            loans = state.loans,
             onFormChange = onFormChange,
             onSave = onSave,
             onDelete = onDelete,
@@ -245,13 +246,14 @@ private fun TransactionRow(item: TransactionItem, onClick: () -> Unit) {
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = { CategoryIcon(item.categoryIcon) },
         headlineContent = { Text(item.categoryName) },
-        supportingContent = if (item.transaction.notes.isNotBlank() || item.transaction.isPeriodic) {
-            {
-                val periodic = if (item.transaction.isPeriodic) "Covers ${item.transaction.coveredMonths} months" else ""
-                Text(listOf(item.transaction.notes, periodic).filter { it.isNotBlank() }.joinToString(" · "), maxLines = 1)
+        supportingContent = item.natureLabel().let { label ->
+            if (item.transaction.notes.isNotBlank() || label != null) {
+                {
+                    Text(listOfNotNull(item.transaction.notes.ifBlank { null }, label).joinToString(" · "), maxLines = 1)
+                }
+            } else {
+                null
             }
-        } else {
-            null
         },
         trailingContent = {
             Text(

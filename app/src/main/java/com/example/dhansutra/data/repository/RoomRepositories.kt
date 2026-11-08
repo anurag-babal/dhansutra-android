@@ -1,11 +1,15 @@
 package com.example.dhansutra.data.repository
 
 import com.example.dhansutra.data.local.dao.CategoryDao
+import com.example.dhansutra.data.local.dao.LoanDao
 import com.example.dhansutra.data.local.dao.MonthlyBudgetDao
 import com.example.dhansutra.data.local.dao.TransactionDao
+import com.example.dhansutra.data.local.entity.LoanEntity
 import com.example.dhansutra.domain.model.BudgetEntry
 import com.example.dhansutra.domain.model.Category
-import com.example.dhansutra.domain.model.ExpenseType
+import com.example.dhansutra.domain.model.Loan
+import com.example.dhansutra.domain.model.LoanBalance
+import com.example.dhansutra.domain.model.LoanDirection
 import com.example.dhansutra.domain.model.MonthCategorySpend
 import com.example.dhansutra.domain.model.MonthTotals
 import com.example.dhansutra.domain.model.PeriodicExpenseItem
@@ -13,9 +17,11 @@ import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.Transaction
 import com.example.dhansutra.domain.model.TransactionFilter
 import com.example.dhansutra.domain.model.TransactionItem
+import com.example.dhansutra.domain.model.TransactionNature
 import com.example.dhansutra.domain.model.TransactionType
 import com.example.dhansutra.domain.repository.BudgetRepository
 import com.example.dhansutra.domain.repository.CategoryRepository
+import com.example.dhansutra.domain.repository.LoanRepository
 import com.example.dhansutra.domain.repository.TransactionRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -57,42 +63,49 @@ class TransactionRepositoryImpl(private val dao: TransactionDao) : TransactionRe
         dao.getById(id)?.let { dao.delete(it) }
     }
 
-    override fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long, expenseType: ExpenseType?) =
-        dao.observeTotal(type, startMillis, endMillis, expenseType)
+    override fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long, nature: TransactionNature?) =
+        dao.observeTotal(type, startMillis, endMillis, nature)
 
-    override suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long, expenseType: ExpenseType?) =
-        dao.getTotal(type, startMillis, endMillis, expenseType)
+    override suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long, nature: TransactionNature?) =
+        dao.getTotal(type, startMillis, endMillis, nature)
 
     override fun observeTotalsByCategory(
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
-        expenseType: ExpenseType?,
-    ) = dao.observeTotalsByCategory(type, startMillis, endMillis, expenseType)
+        nature: TransactionNature?,
+    ) = dao.observeTotalsByCategory(type, startMillis, endMillis, nature)
         .map { l -> l.associate { it.categoryId to it.total } }
 
     override suspend fun getTotalsByCategory(
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
-        expenseType: ExpenseType?,
-    ) = dao.getTotalsByCategory(type, startMillis, endMillis, expenseType).associate { it.categoryId to it.total }
+        nature: TransactionNature?,
+    ) = dao.getTotalsByCategory(type, startMillis, endMillis, nature).associate { it.categoryId to it.total }
 
     override fun observeMonthTotals(startMillis: Long): Flow<List<MonthTotals>> =
         dao.observeMonthTotals(startMillis).map { rows ->
             rows.groupBy { it.monthYear }.map { (month, list) ->
-                val expenses = list.filter { it.type == TransactionType.EXPENSE }
+                fun sum(type: TransactionType, vararg natures: TransactionNature) =
+                    list.filter { it.type == type && it.nature in natures }.sumOf { it.total }
                 MonthTotals(
                     monthYear = month,
-                    spent = expenses.sumOf { it.total },
-                    income = list.filter { it.type == TransactionType.INCOME }.sumOf { it.total },
-                    periodicSpent = expenses.filter { it.expenseType == ExpenseType.PERIODIC_ONE_TIME }.sumOf { it.total },
+                    // Investments and loans are neither earning nor spending.
+                    spent = sum(TransactionType.EXPENSE, TransactionNature.REGULAR_OPERATING, TransactionNature.PERIODIC_ONE_TIME),
+                    income = sum(TransactionType.INCOME, TransactionNature.REGULAR_OPERATING),
+                    periodicSpent = sum(TransactionType.EXPENSE, TransactionNature.PERIODIC_ONE_TIME),
+                    invested = sum(TransactionType.EXPENSE, TransactionNature.INVESTMENT) -
+                        sum(TransactionType.INCOME, TransactionNature.INVESTMENT),
                 )
             }.sortedBy { it.monthYear }
         }
 
-    override fun observeMonthCategoryExpenses(endMillis: Long, expenseType: ExpenseType?): Flow<List<MonthCategorySpend>> =
-        dao.observeMonthCategoryTotals(TransactionType.EXPENSE, endMillis, expenseType)
+    override fun observeNetInvested(startMillis: Long, endMillis: Long): Flow<Long> =
+        dao.observeNetOutflow(TransactionNature.INVESTMENT, startMillis, endMillis)
+
+    override fun observeMonthCategoryExpenses(endMillis: Long, nature: TransactionNature?): Flow<List<MonthCategorySpend>> =
+        dao.observeMonthCategoryTotals(TransactionType.EXPENSE, endMillis, nature)
             .map { l -> l.map { MonthCategorySpend(it.monthYear, it.categoryId, it.total) } }
 
     override fun observeCashBalance(): Flow<Long> =
@@ -102,7 +115,7 @@ class TransactionRepositoryImpl(private val dao: TransactionDao) : TransactionRe
         ) { income, expenses -> income - expenses }
 
     override fun observePeriodicExpenses(startMillis: Long, endMillis: Long): Flow<PeriodicExpenseSummary> =
-        dao.observeByExpenseType(ExpenseType.PERIODIC_ONE_TIME, startMillis, endMillis).map { rows ->
+        dao.observeByNature(TransactionNature.PERIODIC_ONE_TIME, startMillis, endMillis).map { rows ->
             val items = rows.map {
                 PeriodicExpenseItem(
                     id = it.transaction.id,
@@ -120,6 +133,23 @@ class TransactionRepositoryImpl(private val dao: TransactionDao) : TransactionRe
                 items = items,
             )
         }
+}
+
+class LoanRepositoryImpl(private val dao: LoanDao) : LoanRepository {
+    override fun observeAll(): Flow<List<Loan>> = dao.observeAll().map { l -> l.map { it.toDomain() } }
+
+    override fun observeBalances(): Flow<List<LoanBalance>> = dao.observeNets().map { rows ->
+        rows.map { row ->
+            // net = lent out minus received back. For borrowed money the sign flips. Never negative.
+            val outstanding = if (row.direction == LoanDirection.LENT) row.net else -row.net
+            LoanBalance(Loan(row.id, row.counterparty, row.direction), outstanding.coerceAtLeast(0))
+        }
+    }
+
+    override suspend fun getOrCreate(counterparty: String, direction: LoanDirection): Long {
+        val name = counterparty.trim()
+        return dao.find(name, direction)?.id ?: dao.insert(LoanEntity(counterparty = name, direction = direction))
+    }
 }
 
 class BudgetRepositoryImpl(private val dao: MonthlyBudgetDao) : BudgetRepository {

@@ -7,7 +7,15 @@ enum class RolloverType { CARRY_FORWARD, SWEEP_TO_SAVINGS }
 enum class TransactionType { EXPENSE, INCOME }
 
 /**
- * Classifies an expense. Both kinds reduce the real cash balance, but only [REGULAR_OPERATING]
- * counts against monthly category budgets, rollover and spending trends. Persisted by name.
+ * What a transaction represents, independent of its cash direction ([TransactionType]).
+ * Every nature moves the real cash balance, but only some count as income / spending:
+ * - [REGULAR_OPERATING]: everyday income and spending; the only nature measured against monthly budgets.
+ * - [PERIODIC_ONE_TIME]: lump-sum expense covering several months (gym, annual insurance); kept out of budgets.
+ * - [INVESTMENT]: SIP / NPS etc. Expense = contribution, income = redemption; neither is spending nor earning.
+ * - [LOAN]: money lent to / borrowed from someone, and its repayments; neither is spending nor earning.
+ * Persisted by name.
  */
-enum class ExpenseType { REGULAR_OPERATING, PERIODIC_ONE_TIME }
+enum class TransactionNature { REGULAR_OPERATING, PERIODIC_ONE_TIME, INVESTMENT, LOAN }
+
+/** Whether the user lent money to someone or borrowed it. Persisted by name. */
+enum class LoanDirection { LENT, BORROWED }
