@@ -111,7 +111,7 @@ fun PlanningScreen(
             MonthSelector(state.month, onMonthChange, Modifier.padding(horizontal = 8.dp))
             if (!state.rolloverEnabled) {
                 Text(
-                    "Rollover is turned off (see Dashboard) - balances are not carried or swept.",
+                    "Rollover is turned off (see Dashboard) - balances are not carried forward.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

@@ -18,11 +18,11 @@ MVVM + Clean Architecture with manual dependency injection.
 ## Rollover & savings rules
 
 * Month keys are `yyyy-MM`; the month is taken in the device time zone.
-* A budget row exists per (month, category). Missing rows (including past months with spending) are created from the category's default budget by `RolloverManager`, which re-runs whenever categories, spending or the rollover setting change. It is idempotent.
+* A budget row exists per (month, category) for **every** category, from the first month with any activity (a budget row, an expense or an income entry) up to the current month. Missing rows are created from the category's default budget by `RolloverManager`, which re-runs whenever categories, transactions or the rollover setting change. It is idempotent.
 * **Carry Forward:** next month's `carriedOverAmount` = this month's `allocated + carriedOver - spent` (positive or negative).
-* **Sweep to Savings:** next month's carry-over is 0; this month's positive remaining goes to savings (an overspend is forgiven, not subtracted).
-* **Rollover switch off:** every carry-over is 0 and nothing is swept.
-* **Total savings** = swept surplus of closed months (any month before the current one) + all-time (income - expenses) of closed months. A swept surplus is unspent budget, not a transaction, so the two terms are independent and nothing is double counted.
+* **Sweep to Savings:** next month starts fresh (carry-over 0); a leftover is dropped and an overspend is forgiven.
+* **Rollover switch off:** every carry-over is 0.
+* **Total savings** = income - expenses summed over all closed months (any month before the current one). It reflects the money actually kept and does not depend on rollover or budgets.
 * All money is stored as `Long` **paise** and displayed with Indian digit grouping (₹1,23,456.00).
 
 ## Project structure

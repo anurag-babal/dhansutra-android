@@ -38,9 +38,7 @@ class AppContainer(context: Context) {
     }
 
     val observeMonthlyBudget by lazy { ObserveMonthlyBudget(categoryRepository, budgetRepository, transactionRepository) }
-    val observeDashboardSummary by lazy {
-        ObserveDashboardSummary(categoryRepository, budgetRepository, transactionRepository, settingsRepository)
-    }
+    val observeDashboardSummary by lazy { ObserveDashboardSummary(transactionRepository) }
     val observeCategoryBreakdown by lazy { ObserveCategoryBreakdown(categoryRepository, transactionRepository) }
     val observeMonthlyTrend by lazy { ObserveMonthlyTrend(transactionRepository) }
 

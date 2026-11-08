@@ -31,8 +31,9 @@ class RolloverManager(
             combine(
                 categories.observeAll(),
                 transactions.observeMonthCategoryExpenses(Long.MAX_VALUE),
+                transactions.observeMonthTotals(0L),
                 settings.rolloverEnabled,
-            ) { _, _, _ -> }.collect { recalculate() }
+            ) { _, _, _, _ -> }.collect { recalculate() }
         }
     }
 
@@ -40,10 +41,12 @@ class RolloverManager(
         val cats = categories.getAll()
         val existing = budgets.observeAll().first()
         val spend = transactions.observeMonthCategoryExpenses(Long.MAX_VALUE).first()
+        val monthTotals = transactions.observeMonthTotals(0L).first()
         val desired = RolloverCalculator.computeBudgets(
             categories = cats,
             existing = existing,
             spend = spend,
+            monthTotals = monthTotals,
             rolloverEnabled = settings.rolloverEnabled.value,
             current = MonthYear.current(),
         )

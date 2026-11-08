@@ -146,7 +146,7 @@ private fun RolloverCard(state: DashboardUiState, onToggle: (Boolean) -> Unit) {
                 Switch(checked = state.rolloverEnabled, onCheckedChange = onToggle)
             }
             if (!state.rolloverEnabled) {
-                Text("Rollover is off: every month starts fresh and nothing is swept to savings.", style = MaterialTheme.typography.bodySmall)
+                Text("Rollover is off: every month starts fresh with its base budget.", style = MaterialTheme.typography.bodySmall)
             } else if (state.carriedItems.isEmpty()) {
                 Text("Nothing carried into this month.", style = MaterialTheme.typography.bodySmall)
             } else {

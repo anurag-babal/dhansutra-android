@@ -1,5 +1,7 @@
 package com.example.dhansutra.domain.usecase
 
+import kotlinx.coroutines.flow.map
+
 import com.example.dhansutra.domain.model.BudgetItem
 import com.example.dhansutra.domain.model.CategoryBreakdown
 import com.example.dhansutra.domain.model.DashboardSummary
@@ -42,13 +44,8 @@ class ObserveMonthlyBudget(
     }
 }
 
-/** Header-card numbers for the dashboard. Income/spent are for [month]; savings covers closed months. */
-class ObserveDashboardSummary(
-    private val categories: CategoryRepository,
-    private val budgets: BudgetRepository,
-    private val transactions: TransactionRepository,
-    private val settings: SettingsRepository,
-) {
+/** Header-card numbers for the dashboard. Income/spent are for [month]; savings = income - expenses of closed months. */
+class ObserveDashboardSummary(private val transactions: TransactionRepository) {
     operator fun invoke(month: YearMonth): Flow<DashboardSummary> {
         val start = MonthYear.startMillis(month)
         val end = MonthYear.endMillis(month)
@@ -56,14 +53,8 @@ class ObserveDashboardSummary(
             transactions.observeTotal(TransactionType.INCOME, start, end),
             transactions.observeTotal(TransactionType.EXPENSE, start, end),
         ) { income, spent -> income to spent }
-        val savings = combine(
-            categories.observeAll(),
-            budgets.observeAll(),
-            transactions.observeMonthCategoryExpenses(Long.MAX_VALUE),
-            transactions.observeMonthTotals(0L),
-            settings.rolloverEnabled,
-        ) { cats, rows, spend, totals, enabled ->
-            RolloverCalculator.computeSavings(cats, rows, spend, totals, enabled, MonthYear.current())
+        val savings = transactions.observeMonthTotals(0L).map { totals ->
+            RolloverCalculator.computeSavings(totals, MonthYear.current())
         }
         return combine(monthly, savings) { (income, spent), saved ->
             DashboardSummary(income = income, spent = spent, surplus = income - spent, savings = saved)
