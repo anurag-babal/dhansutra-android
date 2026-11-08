@@ -7,9 +7,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.dhansutra.data.local.AppDatabase
 import com.example.dhansutra.data.local.entity.CategoryEntity
 import com.example.dhansutra.data.local.entity.MonthlyBudgetEntity
-import com.example.dhansutra.data.local.entity.RolloverType
+import com.example.dhansutra.domain.model.RolloverType
 import com.example.dhansutra.data.local.entity.TransactionEntity
-import com.example.dhansutra.data.local.entity.TransactionType
+import com.example.dhansutra.domain.model.TransactionType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After

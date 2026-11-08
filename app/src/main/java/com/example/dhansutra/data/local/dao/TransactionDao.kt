@@ -6,7 +6,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.example.dhansutra.data.local.entity.TransactionEntity
-import com.example.dhansutra.data.local.entity.TransactionType
+import com.example.dhansutra.domain.model.TransactionType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -103,4 +103,16 @@ interface TransactionDao {
         """,
     )
     fun observeMonthTotals(startMillis: Long): Flow<List<MonthTypeTotal>>
+
+    /** Per-month, per-category totals for [type] up to [endMillis]; used for savings (sweep) calculation. */
+    @Query(
+        """
+        SELECT strftime('%Y-%m', dateMillis / 1000, 'unixepoch', 'localtime') AS monthYear,
+               categoryId, SUM(amount) AS total
+        FROM transactions
+        WHERE type = :type AND dateMillis <= :endMillis
+        GROUP BY monthYear, categoryId
+        """,
+    )
+    fun observeMonthCategoryTotals(type: TransactionType, endMillis: Long): Flow<List<MonthCategorySum>>
 }

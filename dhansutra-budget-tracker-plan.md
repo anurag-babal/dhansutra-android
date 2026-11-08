@@ -86,7 +86,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 3 – Domain Layer & Repositories
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (JVM unit tests pass. Notes for later phases: enums live in `domain.model`; `RolloverCalculator` holds pure rules; `RolloverManager` (started from `AppContainer.start()`) auto-creates/updates month budget rows on any category/spend/setting change - call `rolloverManager.recalculate()` after editing a budget row; use cases are exposed from `AppContainer` (`observeMonthlyBudget`, `observeDashboardSummary`, `observeCategoryBreakdown`, `observeMonthlyTrend`); `CurrencyFormatter` + `MonthYear` in `util/`; no separate last-processed-month setting needed since rollover is recomputed idempotently.)
 - **Intent:** Encapsulate business rules (budgeting, rollover, savings) behind repository interfaces and use cases (Clean Architecture; PROMPT deliverable #3, repositories part).
 - **Expected Outcomes:** Domain models and repository interfaces in `domain/`; Room-backed implementations in `data/repository/`; rollover logic unit-tested.
 - **Todo List:**

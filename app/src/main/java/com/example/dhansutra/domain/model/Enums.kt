@@ -1,4 +1,4 @@
-package com.example.dhansutra.data.local.entity
+package com.example.dhansutra.domain.model
 
 /** How a category's leftover balance is handled at month end. Persisted by name. */
 enum class RolloverType { CARRY_FORWARD, SWEEP_TO_SAVINGS }

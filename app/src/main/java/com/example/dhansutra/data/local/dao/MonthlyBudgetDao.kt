@@ -19,6 +19,12 @@ interface MonthlyBudgetDao {
     @Query("SELECT * FROM monthly_budgets WHERE monthYear = :monthYear AND categoryId = :categoryId")
     suspend fun get(monthYear: String, categoryId: Long): MonthlyBudgetEntity?
 
+    @Query("SELECT * FROM monthly_budgets")
+    fun observeAll(): Flow<List<MonthlyBudgetEntity>>
+
+    @Query("SELECT MIN(monthYear) FROM monthly_budgets")
+    suspend fun getEarliestMonth(): String?
+
     @Query("SELECT DISTINCT monthYear FROM monthly_budgets ORDER BY monthYear")
     fun observeMonths(): Flow<List<String>>
 

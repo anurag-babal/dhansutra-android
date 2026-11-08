@@ -9,6 +9,6 @@ class DhanSutraApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
+        container = AppContainer(this).also { it.start() }
     }
 }
