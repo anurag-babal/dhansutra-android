@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CategoryDao {
-    @Query("SELECT * FROM categories ORDER BY id")
+    @Query("SELECT * FROM categories ORDER BY name COLLATE NOCASE")
     fun observeAll(): Flow<List<CategoryEntity>>
 
-    @Query("SELECT * FROM categories ORDER BY id")
+    @Query("SELECT * FROM categories ORDER BY name COLLATE NOCASE")
     suspend fun getAll(): List<CategoryEntity>
 
     @Query("SELECT * FROM categories WHERE id = :id")

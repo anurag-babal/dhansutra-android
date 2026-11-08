@@ -40,17 +40,12 @@ class ObserveMonthlyBudget(
         ),
     ) { cats, rows, spent ->
         val rowsByCat = rows.associateBy { it.categoryId }
-        cats.mapNotNull { cat ->
-            val row = rowsByCat[cat.id]
-            val spentAmount = spent[cat.id] ?: 0L
-            if (row == null && spentAmount == 0L) {
-                null
-            } else {
+        cats.filter { it.nature == TransactionNature.REGULAR_OPERATING || rowsByCat.containsKey(it.id) || (spent[it.id] ?: 0L) > 0L }
+            .map { cat ->
+                val row = rowsByCat[cat.id]
+                val spentAmount = spent[cat.id] ?: 0L
                 BudgetItem(cat, row?.allocatedAmount ?: cat.defaultBudget, row?.carriedOverAmount ?: 0L, spentAmount)
             }
-        }
-            // Hide categories with no budget, no carry-over and no spending (e.g. "Salary & Income").
-            .filter { it.allocated != 0L || it.carriedOver != 0L || it.spent != 0L }
     }
 }
 

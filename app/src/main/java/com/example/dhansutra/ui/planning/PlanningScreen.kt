@@ -13,12 +13,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FilterChip
@@ -35,7 +40,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +85,8 @@ fun PlanningRoute() {
         onDelete = vm::deleteEditing,
         onDismissEditor = vm::dismissEditor,
         onMessageShown = vm::consumeMessage,
+        onToggleInactive = vm::toggleShowInactive,
+        onSortChange = vm::setSortOrder,
     )
 }
 
@@ -92,6 +101,8 @@ fun PlanningScreen(
     onDelete: () -> Unit,
     onDismissEditor: () -> Unit,
     onMessageShown: () -> Unit,
+    onToggleInactive: () -> Unit = {},
+    onSortChange: (PlanningSortOrder) -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -109,6 +120,37 @@ fun PlanningScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             MonthSelector(state.month, onMonthChange, Modifier.padding(horizontal = 8.dp))
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilterChip(
+                    selected = state.showInactive,
+                    onClick = onToggleInactive,
+                    label = { Text("Show ₹0 budget") },
+                )
+                var sortExpanded by remember { mutableStateOf(false) }
+                Box {
+                    FilterChip(
+                        selected = false,
+                        onClick = { sortExpanded = true },
+                        label = { Text("Sort: ${state.sortOrder.label}") },
+                        trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, contentDescription = null) },
+                    )
+                    DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
+                        PlanningSortOrder.entries.forEach { order ->
+                            DropdownMenuItem(
+                                text = { Text(order.label, fontWeight = if (order == state.sortOrder) FontWeight.Bold else null) },
+                                onClick = {
+                                    onSortChange(order)
+                                    sortExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             if (!state.rolloverEnabled) {
                 Text(
                     "Rollover is turned off (see Dashboard) - balances are not carried forward.",
@@ -119,7 +161,10 @@ fun PlanningScreen(
             }
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize())
-                state.items.isEmpty() -> EmptyState("No budget for this month.\nTap + to add a category.")
+                state.items.isEmpty() -> EmptyState(
+                    if (state.showInactive) "No categories found.\nTap + to add a category."
+                    else "No active budget for this month.\nToggle 'Show ₹0 budget' or tap + to add a category.",
+                )
                 else -> {
                     HeaderRow()
                     HorizontalDivider()
@@ -284,14 +329,12 @@ fun CategoryEditorDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (!editor.isNew) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onEditorChange { it.copy(setAsDefault = !it.setAsDefault) } },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = editor.setAsDefault, onCheckedChange = { v -> onEditorChange { it.copy(setAsDefault = v) } })
-                        Text("Use as default for future months", style = MaterialTheme.typography.bodyMedium)
-                    }
+                Row(
+                    Modifier.fillMaxWidth().clickable { onEditorChange { it.copy(setAsDefault = !it.setAsDefault) } },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = editor.setAsDefault, onCheckedChange = { v -> onEditorChange { it.copy(setAsDefault = v) } })
+                    Text("Use as default for future months", style = MaterialTheme.typography.bodyMedium)
                 }
                 Text("Rollover at month end", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

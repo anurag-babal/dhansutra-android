@@ -1,7 +1,9 @@
 package com.example.dhansutra.ui.dashboard
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,12 +12,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,11 +65,21 @@ fun DashboardRoute() {
         DashboardViewModel(it.observeDashboardSummary, it.observeMonthlyBudget, it.observePeriodicExpenses, it.observeOpenLoans, it.settingsRepository)
     }
     val state by vm.uiState.collectAsStateWithLifecycle()
-    DashboardScreen(state, vm::setRolloverEnabled)
+    DashboardScreen(
+        state = state,
+        onRolloverToggle = vm::setRolloverEnabled,
+        onToggleZeroSpending = vm::toggleHideZeroSpending,
+        onSortChange = vm::setSortOrder,
+    )
 }
 
 @Composable
-fun DashboardScreen(state: DashboardUiState, onRolloverToggle: (Boolean) -> Unit) {
+fun DashboardScreen(
+    state: DashboardUiState,
+    onRolloverToggle: (Boolean) -> Unit,
+    onToggleZeroSpending: () -> Unit = {},
+    onSortChange: (DashboardBudgetSort) -> Unit = {},
+) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -70,50 +88,121 @@ fun DashboardScreen(state: DashboardUiState, onRolloverToggle: (Boolean) -> Unit
         item { Text(MonthYear.label(state.month), style = MaterialTheme.typography.headlineSmall) }
         item { BalanceCard(state.summary) }
         item { MonthCard(state.summary) }
-        item { Text("Budgets", style = MaterialTheme.typography.titleMedium) }
+        item {
+            BudgetsHeader(
+                rolloverEnabled = state.rolloverEnabled,
+                onRolloverToggle = onRolloverToggle,
+                hideZeroSpending = state.hideZeroSpending,
+                onToggleZeroSpending = onToggleZeroSpending,
+                sortOrder = state.sortOrder,
+                onSortChange = onSortChange,
+            )
+        }
         if (state.budgets.isEmpty()) {
             item {
                 Text(
-                    "No budgets set for this month. Add categories in the Planning tab.",
+                    if (state.hideZeroSpending) "No categories with spending this month."
+                    else "No budgets set for this month. Add categories in the Planning tab.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        items(state.budgets.size) { index -> CategoryProgress(state.budgets[index]) }
+        items(state.budgets.size) { index -> CategoryProgress(state.budgets[index], state.rolloverEnabled) }
         if (state.periodic.items.isNotEmpty()) {
             item { PeriodicExpensesCard(state.periodic) }
         }
         if (state.openLoans.isNotEmpty()) {
             item { LoansCard(state.openLoans) }
         }
-        item { RolloverCard(state, onRolloverToggle) }
     }
 }
 
-/** Hero card: the real bank balance, net worth, and the three positions that sit outside it. */
+@Composable
+private fun BudgetsHeader(
+    rolloverEnabled: Boolean,
+    onRolloverToggle: (Boolean) -> Unit,
+    hideZeroSpending: Boolean,
+    onToggleZeroSpending: () -> Unit,
+    sortOrder: DashboardBudgetSort,
+    onSortChange: (DashboardBudgetSort) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Budgets", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("Rollover", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 6.dp))
+            Switch(checked = rolloverEnabled, onCheckedChange = onRolloverToggle)
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = hideZeroSpending,
+                onClick = onToggleZeroSpending,
+                label = { Text("Hide ₹0 spent") },
+            )
+            var sortExpanded by remember { mutableStateOf(false) }
+            Box {
+                FilterChip(
+                    selected = false,
+                    onClick = { sortExpanded = true },
+                    label = { Text("Sort: ${sortOrder.label}") },
+                    trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, contentDescription = null) },
+                )
+                DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
+                    DashboardBudgetSort.entries.forEach { sort ->
+                        DropdownMenuItem(
+                            text = { Text(sort.label, fontWeight = if (sort == sortOrder) FontWeight.Bold else null) },
+                            onClick = {
+                                onSortChange(sort)
+                                sortExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Hero card: the real bank balance, net worth, and collapsible positions that sit outside it. */
 @Composable
 private fun BalanceCard(summary: DashboardSummary) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column {
-                Text("Cash balance", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    CurrencyFormatter.format(summary.cashBalance),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (summary.cashBalance < 0) MaterialTheme.colorScheme.error else Color.Unspecified,
-                    maxLines = 1,
-                )
-                Text(
-                    "Net worth ${CurrencyFormatter.format(summary.netWorth, false)}",
-                    style = MaterialTheme.typography.bodySmall,
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Card(
+        Modifier.fillMaxWidth().clickable { expanded = !expanded },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Cash balance", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        CurrencyFormatter.format(summary.cashBalance),
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (summary.cashBalance < 0) MaterialTheme.colorScheme.error else Color.Unspecified,
+                        maxLines = 1,
+                    )
+                    Text(
+                        "Net worth ${CurrencyFormatter.format(summary.netWorth, false)}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Hide details" else "Show details",
                 )
             }
-            Row(Modifier.fillMaxWidth()) {
-                Position("Invested", summary.investedTotal, Modifier.weight(1f))
-                Position("Owed to you", summary.owedToYou, Modifier.weight(1f))
-                Position("You owe", summary.youOwe, Modifier.weight(1f))
+            if (expanded) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                Row(Modifier.fillMaxWidth()) {
+                    Position("Invested", summary.investedTotal, Modifier.weight(1f))
+                    Position("Owed to you", summary.owedToYou, Modifier.weight(1f))
+                    Position("You owe", summary.youOwe, Modifier.weight(1f))
+                }
             }
         }
     }
@@ -259,11 +348,19 @@ private fun PeriodicExpenseRow(item: PeriodicExpenseItem) {
 }
 
 @Composable
-private fun CategoryProgress(item: BudgetItem) {
+private fun CategoryProgress(item: BudgetItem, rolloverEnabled: Boolean) {
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CategoryIcon(item.category.iconName, Modifier.size(20.dp))
             Text(item.category.name, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+            if (rolloverEnabled && item.carriedOver != 0L) {
+                Text(
+                    (if (item.carriedOver > 0) "+" else "") + CurrencyFormatter.compact(item.carriedOver) + " carried",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (item.carriedOver < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
             val percent = if (item.available > 0) "${(item.spentFraction * 100).roundToInt()}%" else if (item.spent > 0) "over" else "0%"
             Text(
                 percent,
@@ -272,48 +369,16 @@ private fun CategoryProgress(item: BudgetItem) {
             )
         }
         BudgetProgressBar(item.spentFraction, Modifier.padding(vertical = 6.dp))
+        val budgetDetail = if (rolloverEnabled && item.carriedOver != 0L) {
+            "${CurrencyFormatter.format(item.spent, false)} of ${CurrencyFormatter.format(item.available, false)} (base ${CurrencyFormatter.format(item.allocated, false)})"
+        } else {
+            "${CurrencyFormatter.format(item.spent, false)} of ${CurrencyFormatter.format(item.available, false)}"
+        }
         Text(
-            "${CurrencyFormatter.format(item.spent, false)} of ${CurrencyFormatter.format(item.available, false)}" +
-                if (item.isOverBudget) " · over by ${CurrencyFormatter.format(-item.remaining, false)}" else "",
+            budgetDetail + if (item.isOverBudget) " · over by ${CurrencyFormatter.format(-item.remaining, false)}" else "",
             style = MaterialTheme.typography.bodySmall,
             color = if (item.isOverBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun RolloverCard(state: DashboardUiState, onToggle: (Boolean) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Monthly rollover", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Carry forward or sweep unused budget at month end",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = state.rolloverEnabled, onCheckedChange = onToggle)
-            }
-            if (!state.rolloverEnabled) {
-                Text("Rollover is off: every month starts fresh with its base budget.", style = MaterialTheme.typography.bodySmall)
-            } else if (state.carriedItems.isEmpty()) {
-                Text("Nothing carried into this month.", style = MaterialTheme.typography.bodySmall)
-            } else {
-                Text("Carried into this month", style = MaterialTheme.typography.labelLarge)
-                state.carriedItems.forEach { item ->
-                    Row(Modifier.fillMaxWidth()) {
-                        Text(item.category.name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            (if (item.carriedOver > 0) "+" else "") + CurrencyFormatter.format(item.carriedOver, false),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (item.carriedOver < 0) MaterialTheme.colorScheme.error else Color.Unspecified,
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -71,7 +71,8 @@ class TransactionsViewModel(
         loanRepository.observeAll(),
         items,
     ) { f, form, cats, loans, list ->
-        TransactionsUiState(f, cats, loans, groupByDay(list), isLoading = false, form = form)
+        val sortedCats = cats.sortedBy { it.name.lowercase() }
+        TransactionsUiState(f, sortedCats, loans, groupByDay(list), isLoading = false, form = form)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TransactionsUiState())
 
     // --- filters ---

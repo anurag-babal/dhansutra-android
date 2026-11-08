@@ -36,6 +36,8 @@ class CategoryRepositoryImpl(
     override suspend fun add(category: Category): Long = categoryDao.insert(category.copy(id = 0).toEntity())
     override suspend fun update(category: Category) = categoryDao.update(category.toEntity())
 
+    override suspend fun getTransactionCount(categoryId: Long): Int = transactionDao.countByCategory(categoryId)
+
     override suspend fun delete(categoryId: Long): Boolean {
         if (transactionDao.countByCategory(categoryId) > 0) return false
         val entity = categoryDao.getById(categoryId) ?: return true

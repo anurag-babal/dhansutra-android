@@ -11,8 +11,8 @@ data class CategoryEditor(
     val iconName: String = "category",
     val allocatedText: String = "",
     val rolloverType: RolloverType = RolloverType.CARRY_FORWARD,
-    /** Edit mode only: also store the amount as the category's default for future months. */
-    val setAsDefault: Boolean = false,
+    /** Store the amount as the category's default for future months. */
+    val setAsDefault: Boolean = true,
     val showErrors: Boolean = false,
 ) {
     val isNew: Boolean get() = id == 0L
@@ -37,6 +37,7 @@ data class CategoryEditor(
             iconName = item.category.iconName,
             allocatedText = if (item.allocated == 0L) "" else CurrencyFormatter.toInputText(item.allocated),
             rolloverType = item.category.rolloverType,
+            setAsDefault = item.allocated == item.category.defaultBudget,
         )
     }
 }

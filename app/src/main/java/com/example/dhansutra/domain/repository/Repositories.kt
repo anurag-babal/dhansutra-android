@@ -22,6 +22,8 @@ interface CategoryRepository {
     suspend fun add(category: Category): Long
     suspend fun update(category: Category)
 
+    suspend fun getTransactionCount(categoryId: Long): Int
+
     /** @return false (and does nothing) if the category still has transactions. */
     suspend fun delete(categoryId: Long): Boolean
 }

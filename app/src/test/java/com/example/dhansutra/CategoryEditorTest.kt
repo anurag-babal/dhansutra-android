@@ -29,4 +29,18 @@ class CategoryEditorTest {
         assertEquals(RolloverType.SWEEP_TO_SAVINGS, editor.rolloverType)
         assertFalse(editor.isNew)
     }
+
+    @Test
+    fun defaultBudgetRecovery() {
+        val catWithDefault = Category(4, "Rent", "home", 1_500_000, RolloverType.CARRY_FORWARD)
+        val matchingItem = BudgetItem(catWithDefault, 1_500_000, 0, 0)
+        assertTrue(CategoryEditor.from(matchingItem).setAsDefault)
+
+        val nonMatchingItem = BudgetItem(catWithDefault, 2_000_000, 0, 0)
+        assertFalse(CategoryEditor.from(nonMatchingItem).setAsDefault)
+
+        val newEditor = CategoryEditor()
+        assertTrue(newEditor.isNew)
+        assertTrue(newEditor.setAsDefault)
+    }
 }

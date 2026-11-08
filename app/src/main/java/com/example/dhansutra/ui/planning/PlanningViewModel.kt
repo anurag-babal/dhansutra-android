@@ -22,9 +22,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 
+enum class PlanningSortOrder(val label: String) {
+    NAME_ASC("Name (A-Z)"),
+    NAME_DESC("Name (Z-A)"),
+    BUDGET_DESC("Budget (High-Low)"),
+    SPENT_DESC("Spent (High-Low)"),
+    LEFT_ASC("Left (Low-High)"),
+    LEFT_DESC("Left (High-Low)"),
+    ROLLOVER("Rollover"),
+}
+
 data class PlanningUiState(
     val month: YearMonth = MonthYear.current(),
     val items: List<BudgetItem> = emptyList(),
+    val showInactive: Boolean = false,
+    val sortOrder: PlanningSortOrder = PlanningSortOrder.NAME_ASC,
     val rolloverEnabled: Boolean = true,
     val isLoading: Boolean = true,
     /** Non-null while the add/edit dialog is open. */
@@ -46,18 +58,61 @@ class PlanningViewModel(
 ) : ViewModel() {
 
     private val month = MutableStateFlow(MonthYear.current())
+    private val showInactive = MutableStateFlow(false)
+    private val sortOrder = MutableStateFlow(PlanningSortOrder.NAME_ASC)
     private val editor = MutableStateFlow<CategoryEditor?>(null)
     private val message = MutableStateFlow<String?>(null)
 
-    val uiState: StateFlow<PlanningUiState> = combine(
+    private val dataFlow = combine(
         month,
         month.flatMapLatest { observeMonthlyBudget(it) },
+        showInactive,
+        sortOrder,
+    ) { m, rawItems, inactive, sort ->
+        val filtered = if (inactive) {
+            rawItems
+        } else {
+            rawItems.filter { it.allocated != 0L || it.carriedOver != 0L || it.spent != 0L }
+        }
+        val sorted = when (sort) {
+            PlanningSortOrder.NAME_ASC -> filtered.sortedBy { it.category.name.lowercase() }
+            PlanningSortOrder.NAME_DESC -> filtered.sortedByDescending { it.category.name.lowercase() }
+            PlanningSortOrder.BUDGET_DESC -> filtered.sortedByDescending { it.allocated }
+            PlanningSortOrder.SPENT_DESC -> filtered.sortedByDescending { it.spent }
+            PlanningSortOrder.LEFT_ASC -> filtered.sortedBy { it.remaining }
+            PlanningSortOrder.LEFT_DESC -> filtered.sortedByDescending { it.remaining }
+            PlanningSortOrder.ROLLOVER -> filtered.sortedBy { it.category.rolloverType.name }
+        }
+        PlanningData(m, sorted, inactive, sort)
+    }
+
+    val uiState: StateFlow<PlanningUiState> = combine(
+        dataFlow,
         settingsRepository.rolloverEnabled,
         editor,
         message,
-    ) { m, items, enabled, ed, msg ->
-        PlanningUiState(m, items, enabled, isLoading = false, editor = ed, message = msg)
+    ) { data, enabled, ed, msg ->
+        PlanningUiState(
+            month = data.month,
+            items = data.items,
+            showInactive = data.showInactive,
+            sortOrder = data.sortOrder,
+            rolloverEnabled = enabled,
+            isLoading = false,
+            editor = ed,
+            message = msg,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlanningUiState())
+
+    private data class PlanningData(
+        val month: YearMonth,
+        val items: List<BudgetItem>,
+        val showInactive: Boolean,
+        val sortOrder: PlanningSortOrder,
+    )
+
+    fun toggleShowInactive() = showInactive.update { !it }
+    fun setSortOrder(order: PlanningSortOrder) { sortOrder.value = order }
 
     fun setMonth(value: YearMonth) {
         month.value = value
@@ -91,13 +146,16 @@ class PlanningViewModel(
         val monthKey = MonthYear.key(month.value)
         viewModelScope.launch {
             if (e.isNew) {
-                categoryRepository.add(
+                val newId = categoryRepository.add(
                     Category(
                         name = e.name.trim(),
                         iconName = e.iconName,
-                        defaultBudget = allocated,
+                        defaultBudget = if (e.setAsDefault) allocated else 0L,
                         rolloverType = e.rolloverType,
                     ),
+                )
+                budgetRepository.insertIfAbsent(
+                    BudgetEntry(monthYear = monthKey, categoryId = newId, allocatedAmount = allocated, carriedOverAmount = 0),
                 )
             } else {
                 val existing = categoryRepository.getAll().firstOrNull { it.id == e.id }
@@ -128,10 +186,14 @@ class PlanningViewModel(
     fun deleteEditing() {
         val id = editor.value?.id?.takeIf { it != 0L } ?: return
         viewModelScope.launch {
-            if (categoryRepository.delete(id)) {
+            val count = categoryRepository.getTransactionCount(id)
+            if (count > 0) {
+                message.value = "Cannot delete: category has $count transaction" + (if (count == 1) "" else "s") + " (check other months/filters)."
+            } else if (categoryRepository.delete(id)) {
+                rolloverManager.recalculate()
                 editor.value = null
             } else {
-                message.value = "This category has transactions and can't be deleted."
+                message.value = "Failed to delete category."
             }
         }
     }

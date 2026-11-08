@@ -10,10 +10,12 @@ MVVM + Clean Architecture with manual dependency injection.
 
 | Tab | What it does |
 | --- | --- |
-| **Dashboard** | Cash balance and net worth (with invested, owed to you and you owe); a "This month" ledger (income, regular spending, periodic payments, invested, surplus); budget-vs-actual progress per category (regular spending only); collapsible periodic-payment and lending/borrowing cards; global rollover switch. |
-| **Planning** | Per-category table: Budget \| Spent \| Left \| Rollover mode. Edit the month's budget, rollover mode (Carry forward / Sweep to savings), name and icon; add or delete categories (deletion is blocked while a category has transactions). |
-| **Transactions** | FAB to add; month selector, category filter, date-range filter and text search over notes and category names; tap a row to edit or delete. Entry is a Material 3 bottom sheet (amount, date picker, category dropdown, Expense/Income, a nature selector - Regular, Periodic / One-time, Investment, Loan - and notes). Periodic asks for a duration; Loan asks who it is with and whether you lent or borrowed). |
+| **Dashboard** | Collapsible cash balance & net worth card (with invested, owed to you and you owe); "This month" ledger; sortable budget progress with zero-spend filter; integrated rollover toggle with inline carried-over badges; collapsible periodic-payment and lending/borrowing cards. |
+| **Planning** | Per-category table: Budget \| Spent \| Left \| Rollover mode. Sort by name, budget, spent, remaining, or rollover; "Show ₹0 budget" toggle to unhide inactive categories; edit budget and default template values; safe category deletion with transaction count feedback. |
+| **Transactions** | FAB to add; month selector, alphabetical category filter, date-range filter and text search over notes and category names; tap a row to edit or delete. Entry is a Material 3 bottom sheet with alphabetical category dropdown, nature selector (Regular, Periodic, Investment, Loan), date picker, and duration/person linking. |
 | **Analytics** | Donut chart of the month's spending by category and a 6-month spending trend line chart, both drawn with Compose Canvas. |
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete technical blueprint and domain rules.
 
 ## Rollover & savings rules
 
