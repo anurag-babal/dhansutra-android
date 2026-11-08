@@ -118,7 +118,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 5 – Transactions Tab & Entry BottomSheet
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (Notes: added seeded category "Salary & Income" so income entries have a category; form logic is in `TransactionForm` (unit-tested); tap a row to edit, Delete button is in the edit sheet (no swipe-delete); date range filter overrides the month selector.)
 - **Intent:** Enable fast data entry first, since all other screens depend on transaction data (PROMPT deliverable #4: Transaction Entry BottomSheet).
 - **Expected Outcomes:** User can add/edit/delete transactions; list can be filtered by month, category, date range, and searched; state exposed via `StateFlow`.
 - **Todo List:**

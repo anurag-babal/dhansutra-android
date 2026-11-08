@@ -1,0 +1,217 @@
+package com.example.dhansutra.ui.transactions
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.example.dhansutra.domain.model.Category
+import com.example.dhansutra.domain.model.RolloverType
+import com.example.dhansutra.domain.model.TransactionType
+import com.example.dhansutra.ui.theme.DhanSutraTheme
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransactionEntryBottomSheet(
+    form: TransactionForm,
+    categories: List<Category>,
+    onFormChange: ((TransactionForm) -> TransactionForm) -> Unit,
+    onSave: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        TransactionEntryContent(form, categories, onFormChange, onSave, onDelete)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransactionEntryContent(
+    form: TransactionForm,
+    categories: List<Category>,
+    onFormChange: ((TransactionForm) -> TransactionForm) -> Unit,
+    onSave: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    var categoryExpanded by remember { mutableStateOf(false) }
+    val selectedCategory = categories.firstOrNull { it.id == form.categoryId }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp)
+            .navigationBarsPadding(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            if (form.id == 0L) "Add transaction" else "Edit transaction",
+            style = MaterialTheme.typography.titleLarge,
+        )
+
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            TransactionType.entries.forEachIndexed { index, type ->
+                SegmentedButton(
+                    selected = form.type == type,
+                    onClick = { onFormChange { it.copy(type = type) } },
+                    shape = SegmentedButtonDefaults.itemShape(index, TransactionType.entries.size),
+                ) { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) }
+            }
+        }
+
+        OutlinedTextField(
+            value = form.amountText,
+            onValueChange = { text -> onFormChange { it.copy(amountText = text.filter { c -> c.isDigit() || c == '.' }) } },
+            label = { Text("Amount") },
+            prefix = { Text("₹") },
+            singleLine = true,
+            isError = form.showErrors && form.amountError,
+            supportingText = if (form.showErrors && form.amountError) {
+                { Text("Enter an amount greater than 0 (max 2 decimals)") }
+            } else {
+                null
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        ExposedDropdownMenuBox(expanded = categoryExpanded, onExpandedChange = { categoryExpanded = it }) {
+            OutlinedTextField(
+                value = selectedCategory?.name.orEmpty(),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Category") },
+                isError = form.showErrors && form.categoryError,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            )
+            ExposedDropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                categories.forEach { category ->
+                    DropdownMenuItem(
+                        text = { Text(category.name) },
+                        onClick = {
+                            onFormChange { it.copy(categoryId = category.id) }
+                            categoryExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+
+        OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.CalendarMonth, contentDescription = null)
+            Text("  " + form.date.format(dateFormat))
+        }
+
+        OutlinedTextField(
+            value = form.notes,
+            onValueChange = { text -> onFormChange { it.copy(notes = text) } },
+            label = { Text("Notes (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+        )
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (form.id != 0L) {
+                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) { Text("Delete") }
+            }
+            Button(onClick = onSave, modifier = Modifier.weight(1f)) { Text("Save") }
+        }
+    }
+
+    if (showDatePicker) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = form.date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { millis ->
+                        val picked = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                        onFormChange { it.copy(date = picked) }
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+        ) { DatePicker(state = state) }
+    }
+}
+
+private val previewCategories = listOf(
+    Category(1, "Groceries", "shopping_cart", 800_000, RolloverType.CARRY_FORWARD),
+    Category(2, "Dining & Swiggy", "restaurant", 400_000, RolloverType.SWEEP_TO_SAVINGS),
+)
+
+@Preview(showBackground = true)
+@Composable
+private fun EntryNewPreview() {
+    DhanSutraTheme {
+        TransactionEntryContent(
+            form = TransactionForm(categoryId = 1, date = LocalDate.of(2026, 11, 8)),
+            categories = previewCategories,
+            onFormChange = {}, onSave = {}, onDelete = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun EntryEditWithErrorsPreview() {
+    DhanSutraTheme {
+        TransactionEntryContent(
+            form = TransactionForm(id = 5, amountText = "", categoryId = null, notes = "Dinner", showErrors = true, date = LocalDate.of(2026, 11, 8)),
+            categories = previewCategories,
+            onFormChange = {}, onSave = {}, onDelete = {},
+        )
+    }
+}

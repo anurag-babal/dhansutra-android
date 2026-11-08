@@ -43,6 +43,8 @@ internal object SeedCallback : RoomDatabase.Callback() {
             arrayOf<Any>("Utilities", "bolt", 300_000L, "SWEEP_TO_SAVINGS"),
             arrayOf<Any>("Dining & Swiggy", "restaurant", 400_000L, "SWEEP_TO_SAVINGS"),
             arrayOf<Any>("Shopping", "shopping_bag", 500_000L, "SWEEP_TO_SAVINGS"),
+            // Gives income entries a sensible category; has no budget.
+            arrayOf<Any>("Salary & Income", "savings", 0L, "CARRY_FORWARD"),
         ).forEach {
             db.execSQL(
                 "INSERT INTO categories (name, iconName, defaultBudget, rolloverType) VALUES (?, ?, ?, ?)",
