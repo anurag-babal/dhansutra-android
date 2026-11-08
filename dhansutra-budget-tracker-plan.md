@@ -163,7 +163,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 8 – Analytics & Reports Tab
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (Notes: Canvas donut chart + legend and 6-month spending line chart in `ui/analytics/Charts.kt`; helper maths `niceCeil`/`percentOf` unit-tested.)
 - **Intent:** Visualise spending (PROMPT feature #4) using Compose Canvas only.
 - **Expected Outcomes:** Monthly category breakdown (donut/pie or segmented bar with legend) and Month-over-Month spending line chart.
 - **Todo List:**
