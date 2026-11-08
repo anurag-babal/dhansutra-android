@@ -149,7 +149,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 7 – Dashboard Tab
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (Notes: toggling rollover persists the setting; `RolloverManager` observes it and recomputes automatically, so the VM needs no extra call. Dashboard always shows the current month; dedicated VM unit tests were skipped because the VM is a thin combine of already-tested use cases.)
 - **Intent:** Provide the home overview (PROMPT deliverable #4: Dashboard).
 - **Expected Outcomes:** Four header cards (Total Monthly Income, Spent MTD, Remaining Surplus, Overall Savings); per-category Budget vs Actual progress bars; rollover summary with global enable/disable switch.
 - **Todo List:**
