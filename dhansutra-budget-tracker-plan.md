@@ -178,7 +178,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 9 – Polish, Testing & Documentation
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (Debug + release (R8) builds, lint (no new issues from app code) and all JVM unit tests pass; README written; zero-budget/zero-spend rows hidden from the Dashboard progress list. Instrumented DAO tests compile but need a device to run.)
 - **Intent:** Harden the app and deliver the documentation deliverable (PROMPT deliverable #1, #5).
 - **Expected Outcomes:** Clean build, passing unit/instrumented tests, accessibility and edge cases handled, README documents structure.
 - **Todo List:**

@@ -38,7 +38,9 @@ class DashboardViewModel(
         observeBudget(month),
         settingsRepository.rolloverEnabled,
     ) { summary, budgets, enabled ->
-        DashboardUiState(month, summary, budgets, enabled, isLoading = false)
+        // Hide categories with no budget and no activity (e.g. the income category) from the progress list.
+        val visible = budgets.filter { it.available != 0L || it.spent != 0L }
+        DashboardUiState(month, summary, visible, enabled, isLoading = false)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState(month))
 
     fun setRolloverEnabled(enabled: Boolean) = settingsRepository.setRolloverEnabled(enabled)
