@@ -245,8 +245,11 @@ private fun TransactionRow(item: TransactionItem, onClick: () -> Unit) {
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = { CategoryIcon(item.categoryIcon) },
         headlineContent = { Text(item.categoryName) },
-        supportingContent = if (item.transaction.notes.isNotBlank()) {
-            { Text(item.transaction.notes, maxLines = 1) }
+        supportingContent = if (item.transaction.notes.isNotBlank() || item.transaction.isPeriodic) {
+            {
+                val periodic = if (item.transaction.isPeriodic) "Covers ${item.transaction.coveredMonths} months" else ""
+                Text(listOf(item.transaction.notes, periodic).filter { it.isNotBlank() }.joinToString(" · "), maxLines = 1)
+            }
         } else {
             null
         },

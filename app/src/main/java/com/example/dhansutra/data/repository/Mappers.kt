@@ -12,8 +12,8 @@ import com.example.dhansutra.domain.model.TransactionItem
 fun CategoryEntity.toDomain() = Category(id, name, iconName, defaultBudget, rolloverType)
 fun Category.toEntity() = CategoryEntity(id, name, iconName, defaultBudget, rolloverType)
 
-fun TransactionEntity.toDomain() = Transaction(id, amount, categoryId, dateMillis, type, notes)
-fun Transaction.toEntity() = TransactionEntity(id, amount, categoryId, dateMillis, type, notes)
+fun TransactionEntity.toDomain() = Transaction(id, amount, categoryId, dateMillis, type, notes, expenseType, coveredMonths)
+fun Transaction.toEntity() = TransactionEntity(id, amount, categoryId, dateMillis, type, notes, expenseType, coveredMonths)
 
 fun TransactionWithCategory.toDomain() = TransactionItem(transaction.toDomain(), categoryName, categoryIcon)
 

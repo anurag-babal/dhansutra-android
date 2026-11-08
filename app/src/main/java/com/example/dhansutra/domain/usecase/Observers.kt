@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.map
 import com.example.dhansutra.domain.model.BudgetItem
 import com.example.dhansutra.domain.model.CategoryBreakdown
 import com.example.dhansutra.domain.model.DashboardSummary
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.MonthlyTrendPoint
+import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.TransactionType
 import com.example.dhansutra.domain.repository.BudgetRepository
 import com.example.dhansutra.domain.repository.CategoryRepository
@@ -16,7 +18,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.time.YearMonth
 
-/** Per-category allocated / carried over / spent for one month. */
+/**
+ * Per-category allocated / carried over / spent for one month. Spent counts only
+ * [ExpenseType.REGULAR_OPERATING] expenses so periodic lump sums never distort monthly budgets.
+ */
 class ObserveMonthlyBudget(
     private val categories: CategoryRepository,
     private val budgets: BudgetRepository,
@@ -29,6 +34,7 @@ class ObserveMonthlyBudget(
             TransactionType.EXPENSE,
             MonthYear.startMillis(month),
             MonthYear.endMillis(month),
+            ExpenseType.REGULAR_OPERATING,
         ),
     ) { cats, rows, spent ->
         val rowsByCat = rows.associateBy { it.categoryId }
@@ -46,25 +52,42 @@ class ObserveMonthlyBudget(
     }
 }
 
-/** Header-card numbers for the dashboard. Income/spent are for [month]; savings = income - expenses of closed months. */
+/**
+ * Header-card numbers for the dashboard. Income / regular spent / periodic spent are for [month];
+ * savings = income - ALL expenses of closed months; cashBalance = all-time income - ALL expenses.
+ */
 class ObserveDashboardSummary(private val transactions: TransactionRepository) {
     operator fun invoke(month: YearMonth): Flow<DashboardSummary> {
         val start = MonthYear.startMillis(month)
         val end = MonthYear.endMillis(month)
         val monthly = combine(
             transactions.observeTotal(TransactionType.INCOME, start, end),
-            transactions.observeTotal(TransactionType.EXPENSE, start, end),
-        ) { income, spent -> income to spent }
+            transactions.observeTotal(TransactionType.EXPENSE, start, end, ExpenseType.REGULAR_OPERATING),
+            transactions.observeTotal(TransactionType.EXPENSE, start, end, ExpenseType.PERIODIC_ONE_TIME),
+        ) { income, regular, periodic -> Triple(income, regular, periodic) }
         val savings = transactions.observeMonthTotals(0L).map { totals ->
             RolloverCalculator.computeSavings(totals, MonthYear.current())
         }
-        return combine(monthly, savings) { (income, spent), saved ->
-            DashboardSummary(income = income, spent = spent, surplus = income - spent, savings = saved)
+        return combine(monthly, savings, transactions.observeCashBalance()) { (income, regular, periodic), saved, cash ->
+            DashboardSummary(
+                income = income,
+                spent = regular,
+                surplus = income - regular - periodic,
+                savings = saved,
+                periodicSpent = periodic,
+                cashBalance = cash,
+            )
         }
     }
 }
 
-/** Expense total per category for one month, largest first (zero entries dropped). */
+/** Periodic / one-time lump-sum payments made in one month, with total and monthly-equivalent. */
+class ObservePeriodicExpenses(private val transactions: TransactionRepository) {
+    operator fun invoke(month: YearMonth): Flow<PeriodicExpenseSummary> =
+        transactions.observePeriodicExpenses(MonthYear.startMillis(month), MonthYear.endMillis(month))
+}
+
+/** Regular operating expense total per category for one month, largest first (zero entries dropped). */
 class ObserveCategoryBreakdown(
     private val categories: CategoryRepository,
     private val transactions: TransactionRepository,
@@ -75,6 +98,7 @@ class ObserveCategoryBreakdown(
             TransactionType.EXPENSE,
             MonthYear.startMillis(month),
             MonthYear.endMillis(month),
+            ExpenseType.REGULAR_OPERATING,
         ),
     ) { cats, totals ->
         cats.mapNotNull { c -> totals[c.id]?.takeIf { it > 0 }?.let { CategoryBreakdown(c.id, c.name, it) } }
@@ -82,7 +106,10 @@ class ObserveCategoryBreakdown(
     }
 }
 
-/** Spent/income for each of the last [months] months ending at [end] (months without data are zero). */
+/**
+ * Regular operating spend / income for each of the last [months] months ending at [end] (months
+ * without data are zero). Periodic lump sums are excluded so they don't skew the trend.
+ */
 class ObserveMonthlyTrend(private val transactions: TransactionRepository) {
     operator fun invoke(end: YearMonth, months: Int): Flow<List<MonthlyTrendPoint>> {
         val first = end.minusMonths((months - 1).toLong())
@@ -93,7 +120,7 @@ class ObserveMonthlyTrend(private val transactions: TransactionRepository) {
                     emit(
                         MonthYear.range(first, end).map { m ->
                             val t = byMonth[MonthYear.key(m)]
-                            MonthlyTrendPoint(m, t?.spent ?: 0L, t?.income ?: 0L)
+                            MonthlyTrendPoint(m, t?.operatingSpent ?: 0L, t?.income ?: 0L)
                         },
                     )
                 }

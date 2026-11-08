@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.dhansutra.data.local.AppDatabase
 import com.example.dhansutra.data.local.entity.CategoryEntity
 import com.example.dhansutra.data.local.entity.MonthlyBudgetEntity
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.RolloverType
 import com.example.dhansutra.data.local.entity.TransactionEntity
 import com.example.dhansutra.domain.model.TransactionType
@@ -42,8 +43,20 @@ class DaoTest {
     @After
     fun tearDown() = db.close()
 
-    private suspend fun tx(amount: Long, cat: Long, date: Long, type: TransactionType, notes: String = "") =
-        db.transactionDao().insert(TransactionEntity(amount = amount, categoryId = cat, dateMillis = date, type = type, notes = notes))
+    private suspend fun tx(
+        amount: Long,
+        cat: Long,
+        date: Long,
+        type: TransactionType,
+        notes: String = "",
+        expenseType: ExpenseType = ExpenseType.REGULAR_OPERATING,
+        coveredMonths: Int = 1,
+    ) = db.transactionDao().insert(
+        TransactionEntity(
+            amount = amount, categoryId = cat, dateMillis = date, type = type, notes = notes,
+            expenseType = expenseType, coveredMonths = coveredMonths,
+        ),
+    )
 
     @Test
     fun filterByCategoryDateAndSearch() = runBlocking {
@@ -70,12 +83,33 @@ class DaoTest {
         tx(500, groceries, 2_000, TransactionType.INCOME)
         val dao = db.transactionDao()
 
-        assertEquals(32, dao.observeTotal(TransactionType.EXPENSE, 0, 10_000).first())
-        assertEquals(500, dao.getTotal(TransactionType.INCOME, 0, 10_000))
-        assertEquals(0, dao.getTotal(TransactionType.INCOME, 5_000, 10_000))
-        val byCat = dao.getTotalsByCategory(TransactionType.EXPENSE, 0, 10_000).associate { it.categoryId to it.total }
+        assertEquals(32, dao.observeTotal(TransactionType.EXPENSE, 0, 10_000, null).first())
+        assertEquals(500, dao.getTotal(TransactionType.INCOME, 0, 10_000, null))
+        assertEquals(0, dao.getTotal(TransactionType.INCOME, 5_000, 10_000, null))
+        val byCat = dao.getTotalsByCategory(TransactionType.EXPENSE, 0, 10_000, null).associate { it.categoryId to it.total }
         assertEquals(25L, byCat[groceries])
         assertEquals(7L, byCat[dining])
+    }
+
+    @Test
+    fun periodicExpensesAreSeparatedFromRegularButCountInCashBalance() = runBlocking {
+        tx(10, groceries, 1_000, TransactionType.EXPENSE)
+        tx(1_200, dining, 2_000, TransactionType.EXPENSE, "Gym", ExpenseType.PERIODIC_ONE_TIME, 6)
+        tx(2_000, groceries, 2_000, TransactionType.INCOME)
+        val dao = db.transactionDao()
+
+        assertEquals(10, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, ExpenseType.REGULAR_OPERATING))
+        assertEquals(1_200, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, ExpenseType.PERIODIC_ONE_TIME))
+        assertEquals(1_210, dao.getTotal(TransactionType.EXPENSE, 0, 10_000, null))
+        assertEquals(1_210, dao.observeAllTimeTotal(TransactionType.EXPENSE).first())
+        assertEquals(2_000, dao.observeAllTimeTotal(TransactionType.INCOME).first())
+
+        val regularByCat = dao.getTotalsByCategory(TransactionType.EXPENSE, 0, 10_000, ExpenseType.REGULAR_OPERATING)
+        assertEquals(listOf(groceries), regularByCat.map { it.categoryId })
+
+        val periodic = dao.observeByExpenseType(ExpenseType.PERIODIC_ONE_TIME, 0, 10_000).first().single()
+        assertEquals("Gym", periodic.transaction.notes)
+        assertEquals(6, periodic.transaction.coveredMonths)
     }
 
     @Test

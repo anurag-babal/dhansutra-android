@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.dhansutra.data.local.dao.CategoryDao
 import com.example.dhansutra.data.local.dao.MonthlyBudgetDao
@@ -14,7 +15,7 @@ import com.example.dhansutra.data.local.entity.TransactionEntity
 
 @Database(
     entities = [CategoryEntity::class, TransactionEntity::class, MonthlyBudgetEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,7 +29,16 @@ abstract class AppDatabase : RoomDatabase() {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)
                 .addCallback(SeedCallback)
+                .addMigrations(MIGRATION_1_2)
                 .build()
+    }
+}
+
+/** Adds periodic-expense tagging to transactions; existing rows become regular 1-month expenses. */
+internal val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE transactions ADD COLUMN expenseType TEXT NOT NULL DEFAULT 'REGULAR_OPERATING'")
+        db.execSQL("ALTER TABLE transactions ADD COLUMN coveredMonths INTEGER NOT NULL DEFAULT 1")
     }
 }
 

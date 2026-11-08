@@ -14,6 +14,7 @@ import com.example.dhansutra.domain.usecase.ObserveCategoryBreakdown
 import com.example.dhansutra.domain.usecase.ObserveDashboardSummary
 import com.example.dhansutra.domain.usecase.ObserveMonthlyBudget
 import com.example.dhansutra.domain.usecase.ObserveMonthlyTrend
+import com.example.dhansutra.domain.usecase.ObservePeriodicExpenses
 import com.example.dhansutra.domain.usecase.RolloverManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,7 @@ class AppContainer(context: Context) {
     val observeDashboardSummary by lazy { ObserveDashboardSummary(transactionRepository) }
     val observeCategoryBreakdown by lazy { ObserveCategoryBreakdown(categoryRepository, transactionRepository) }
     val observeMonthlyTrend by lazy { ObserveMonthlyTrend(transactionRepository) }
+    val observePeriodicExpenses by lazy { ObservePeriodicExpenses(transactionRepository) }
 
     /** Starts background work (budget row maintenance). Called once from the Application. */
     fun start() {

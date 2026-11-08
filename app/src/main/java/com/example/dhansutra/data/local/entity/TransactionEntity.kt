@@ -1,9 +1,11 @@
 package com.example.dhansutra.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.TransactionType
 
 @Entity(
@@ -26,4 +28,6 @@ data class TransactionEntity(
     val dateMillis: Long,
     val type: TransactionType,
     val notes: String = "",
+    @ColumnInfo(defaultValue = "REGULAR_OPERATING") val expenseType: ExpenseType = ExpenseType.REGULAR_OPERATING,
+    @ColumnInfo(defaultValue = "1") val coveredMonths: Int = 1,
 )

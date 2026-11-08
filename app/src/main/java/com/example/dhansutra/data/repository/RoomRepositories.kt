@@ -5,8 +5,11 @@ import com.example.dhansutra.data.local.dao.MonthlyBudgetDao
 import com.example.dhansutra.data.local.dao.TransactionDao
 import com.example.dhansutra.domain.model.BudgetEntry
 import com.example.dhansutra.domain.model.Category
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.MonthCategorySpend
 import com.example.dhansutra.domain.model.MonthTotals
+import com.example.dhansutra.domain.model.PeriodicExpenseItem
+import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.Transaction
 import com.example.dhansutra.domain.model.TransactionFilter
 import com.example.dhansutra.domain.model.TransactionItem
@@ -15,6 +18,7 @@ import com.example.dhansutra.domain.repository.BudgetRepository
 import com.example.dhansutra.domain.repository.CategoryRepository
 import com.example.dhansutra.domain.repository.TransactionRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 class CategoryRepositoryImpl(
@@ -53,32 +57,69 @@ class TransactionRepositoryImpl(private val dao: TransactionDao) : TransactionRe
         dao.getById(id)?.let { dao.delete(it) }
     }
 
-    override fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long) =
-        dao.observeTotal(type, startMillis, endMillis)
+    override fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long, expenseType: ExpenseType?) =
+        dao.observeTotal(type, startMillis, endMillis, expenseType)
 
-    override suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long) =
-        dao.getTotal(type, startMillis, endMillis)
+    override suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long, expenseType: ExpenseType?) =
+        dao.getTotal(type, startMillis, endMillis, expenseType)
 
-    override fun observeTotalsByCategory(type: TransactionType, startMillis: Long, endMillis: Long) =
-        dao.observeTotalsByCategory(type, startMillis, endMillis).map { l -> l.associate { it.categoryId to it.total } }
+    override fun observeTotalsByCategory(
+        type: TransactionType,
+        startMillis: Long,
+        endMillis: Long,
+        expenseType: ExpenseType?,
+    ) = dao.observeTotalsByCategory(type, startMillis, endMillis, expenseType)
+        .map { l -> l.associate { it.categoryId to it.total } }
 
-    override suspend fun getTotalsByCategory(type: TransactionType, startMillis: Long, endMillis: Long) =
-        dao.getTotalsByCategory(type, startMillis, endMillis).associate { it.categoryId to it.total }
+    override suspend fun getTotalsByCategory(
+        type: TransactionType,
+        startMillis: Long,
+        endMillis: Long,
+        expenseType: ExpenseType?,
+    ) = dao.getTotalsByCategory(type, startMillis, endMillis, expenseType).associate { it.categoryId to it.total }
 
     override fun observeMonthTotals(startMillis: Long): Flow<List<MonthTotals>> =
         dao.observeMonthTotals(startMillis).map { rows ->
             rows.groupBy { it.monthYear }.map { (month, list) ->
+                val expenses = list.filter { it.type == TransactionType.EXPENSE }
                 MonthTotals(
                     monthYear = month,
-                    spent = list.filter { it.type == TransactionType.EXPENSE }.sumOf { it.total },
+                    spent = expenses.sumOf { it.total },
                     income = list.filter { it.type == TransactionType.INCOME }.sumOf { it.total },
+                    periodicSpent = expenses.filter { it.expenseType == ExpenseType.PERIODIC_ONE_TIME }.sumOf { it.total },
                 )
             }.sortedBy { it.monthYear }
         }
 
-    override fun observeMonthCategoryExpenses(endMillis: Long): Flow<List<MonthCategorySpend>> =
-        dao.observeMonthCategoryTotals(TransactionType.EXPENSE, endMillis)
+    override fun observeMonthCategoryExpenses(endMillis: Long, expenseType: ExpenseType?): Flow<List<MonthCategorySpend>> =
+        dao.observeMonthCategoryTotals(TransactionType.EXPENSE, endMillis, expenseType)
             .map { l -> l.map { MonthCategorySpend(it.monthYear, it.categoryId, it.total) } }
+
+    override fun observeCashBalance(): Flow<Long> =
+        combine(
+            dao.observeAllTimeTotal(TransactionType.INCOME),
+            dao.observeAllTimeTotal(TransactionType.EXPENSE),
+        ) { income, expenses -> income - expenses }
+
+    override fun observePeriodicExpenses(startMillis: Long, endMillis: Long): Flow<PeriodicExpenseSummary> =
+        dao.observeByExpenseType(ExpenseType.PERIODIC_ONE_TIME, startMillis, endMillis).map { rows ->
+            val items = rows.map {
+                PeriodicExpenseItem(
+                    id = it.transaction.id,
+                    categoryName = it.categoryName,
+                    categoryIcon = it.categoryIcon,
+                    notes = it.transaction.notes,
+                    dateMillis = it.transaction.dateMillis,
+                    amount = it.transaction.amount,
+                    coveredMonths = it.transaction.coveredMonths,
+                )
+            }
+            PeriodicExpenseSummary(
+                total = items.sumOf { it.amount },
+                monthlyEquivalent = items.sumOf { it.monthlyEquivalent },
+                items = items,
+            )
+        }
 }
 
 class BudgetRepositoryImpl(private val dao: MonthlyBudgetDao) : BudgetRepository {

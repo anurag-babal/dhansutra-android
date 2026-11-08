@@ -1,5 +1,6 @@
 package com.example.dhansutra
 
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.Transaction
 import com.example.dhansutra.domain.model.TransactionItem
 import com.example.dhansutra.domain.model.TransactionType
@@ -45,6 +46,36 @@ class TransactionFormTest {
         assertEquals("1250.5", form.amountText)
         assertEquals(date, form.date)
         assertEquals(item.transaction, form.toTransaction())
+    }
+
+    @Test
+    fun periodicExpenseCarriesDuration() {
+        val form = TransactionForm(
+            amountText = "12000", categoryId = 1, date = date,
+            expenseType = ExpenseType.PERIODIC_ONE_TIME, coveredMonths = 6,
+        )
+        val tx = form.toTransaction()!!
+        assertEquals(ExpenseType.PERIODIC_ONE_TIME, tx.expenseType)
+        assertEquals(6, tx.coveredMonths)
+        assertEquals(200_000L, tx.monthlyEquivalent)
+        // round trip
+        val back = TransactionForm.from(TransactionItem(tx.copy(id = 4), "Gym", "x"))
+        assertEquals(6, back.coveredMonths)
+        assertTrue(back.isPeriodic)
+    }
+
+    @Test
+    fun regularAndIncomeIgnorePeriodicSelection() {
+        val regular = TransactionForm(amountText = "10", categoryId = 1, coveredMonths = 12).toTransaction()!!
+        assertEquals(ExpenseType.REGULAR_OPERATING, regular.expenseType)
+        assertEquals(1, regular.coveredMonths)
+
+        val income = TransactionForm(
+            amountText = "10", categoryId = 1, type = TransactionType.INCOME,
+            expenseType = ExpenseType.PERIODIC_ONE_TIME, coveredMonths = 6,
+        ).toTransaction()!!
+        assertEquals(ExpenseType.REGULAR_OPERATING, income.expenseType)
+        assertEquals(1, income.coveredMonths)
     }
 
     @Test

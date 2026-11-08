@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.dhansutra.domain.model.Category
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.RolloverType
 import com.example.dhansutra.domain.model.TransactionType
 import com.example.dhansutra.ui.theme.DhanSutraTheme
@@ -81,6 +82,7 @@ fun TransactionEntryContent(
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var categoryExpanded by remember { mutableStateOf(false) }
+    var durationExpanded by remember { mutableStateOf(false) }
     val selectedCategory = categories.firstOrNull { it.id == form.categoryId }
 
     Column(
@@ -104,6 +106,41 @@ fun TransactionEntryContent(
                     onClick = { onFormChange { it.copy(type = type) } },
                     shape = SegmentedButtonDefaults.itemShape(index, TransactionType.entries.size),
                 ) { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) }
+            }
+        }
+
+        if (form.type == TransactionType.EXPENSE) {
+            ExpenseTypeSelector(
+                selected = form.expenseType,
+                onSelect = { selected -> onFormChange { it.copy(expenseType = selected) } },
+            )
+            if (form.isPeriodic) {
+                ExposedDropdownMenuBox(expanded = durationExpanded, onExpandedChange = { durationExpanded = it }) {
+                    OutlinedTextField(
+                        value = durationLabel(form.coveredMonths),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Duration covered") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(durationExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                    )
+                    ExposedDropdownMenu(expanded = durationExpanded, onDismissRequest = { durationExpanded = false }) {
+                        PERIODIC_DURATION_OPTIONS.forEach { months ->
+                            DropdownMenuItem(
+                                text = { Text(durationLabel(months)) },
+                                onClick = {
+                                    onFormChange { it.copy(coveredMonths = months) }
+                                    durationExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+                Text(
+                    "Full amount is deducted today. It won't count against your monthly category budgets.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -187,6 +224,26 @@ fun TransactionEntryContent(
     }
 }
 
+/** Regular monthly | Periodic / one-time selector. */
+@Composable
+private fun ExpenseTypeSelector(selected: ExpenseType, onSelect: (ExpenseType) -> Unit) {
+    val options = listOf(
+        ExpenseType.REGULAR_OPERATING to "Regular monthly",
+        ExpenseType.PERIODIC_ONE_TIME to "Periodic / One-time",
+    )
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (type, label) ->
+            SegmentedButton(
+                selected = selected == type,
+                onClick = { onSelect(type) },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+            ) { Text(label, maxLines = 1) }
+        }
+    }
+}
+
+private fun durationLabel(months: Int) = if (months == 1) "1 Month" else "$months Months"
+
 private val previewCategories = listOf(
     Category(1, "Groceries", "shopping_cart", 800_000, RolloverType.CARRY_FORWARD),
     Category(2, "Dining & Swiggy", "restaurant", 400_000, RolloverType.SWEEP_TO_SAVINGS),
@@ -198,6 +255,24 @@ private fun EntryNewPreview() {
     DhanSutraTheme {
         TransactionEntryContent(
             form = TransactionForm(categoryId = 1, date = LocalDate.of(2026, 11, 8)),
+            categories = previewCategories,
+            onFormChange = {}, onSave = {}, onDelete = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun EntryPeriodicPreview() {
+    DhanSutraTheme {
+        TransactionEntryContent(
+            form = TransactionForm(
+                categoryId = 1,
+                amountText = "12000",
+                expenseType = ExpenseType.PERIODIC_ONE_TIME,
+                coveredMonths = 6,
+                date = LocalDate.of(2026, 11, 8),
+            ),
             categories = previewCategories,
             onFormChange = {}, onSave = {}, onDelete = {},
         )

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.example.dhansutra.data.local.entity.TransactionEntity
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.TransactionType
 import kotlinx.coroutines.flow.Flow
 
@@ -48,27 +49,52 @@ interface TransactionDao {
         query: String,
     ): Flow<List<TransactionWithCategory>>
 
+    /** Transactions of one [expenseType] in the range, newest first (e.g. the periodic breakdown). */
+    @Query(
+        """
+        SELECT t.*, c.name AS categoryName, c.iconName AS categoryIcon
+        FROM transactions t
+        INNER JOIN categories c ON c.id = t.categoryId
+        WHERE t.type = 'EXPENSE' AND t.expenseType = :expenseType
+          AND t.dateMillis BETWEEN :startMillis AND :endMillis
+        ORDER BY t.dateMillis DESC, t.id DESC
+        """,
+    )
+    fun observeByExpenseType(
+        expenseType: ExpenseType,
+        startMillis: Long,
+        endMillis: Long,
+    ): Flow<List<TransactionWithCategory>>
+
+    /** Total of [type] over all time, regardless of expense type: the basis of the real cash balance. */
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type")
+    fun observeAllTimeTotal(type: TransactionType): Flow<Long>
+
+    /** [expenseType] null means all expense types. */
     @Query(
         """
         SELECT COALESCE(SUM(amount), 0) FROM transactions
         WHERE type = :type AND dateMillis BETWEEN :startMillis AND :endMillis
+          AND (:expenseType IS NULL OR expenseType = :expenseType)
         """,
     )
-    fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long): Flow<Long>
+    fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long, expenseType: ExpenseType?): Flow<Long>
 
     @Query(
         """
         SELECT COALESCE(SUM(amount), 0) FROM transactions
         WHERE type = :type AND dateMillis BETWEEN :startMillis AND :endMillis
+          AND (:expenseType IS NULL OR expenseType = :expenseType)
         """,
     )
-    suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long): Long
+    suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long, expenseType: ExpenseType?): Long
 
-    /** Total per category for the given type (typically EXPENSE) in the range. */
+    /** Total per category for the given type (typically EXPENSE) in the range. [expenseType] null means all. */
     @Query(
         """
         SELECT categoryId, SUM(amount) AS total FROM transactions
         WHERE type = :type AND dateMillis BETWEEN :startMillis AND :endMillis
+          AND (:expenseType IS NULL OR expenseType = :expenseType)
         GROUP BY categoryId
         """,
     )
@@ -76,12 +102,14 @@ interface TransactionDao {
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
+        expenseType: ExpenseType?,
     ): Flow<List<CategorySum>>
 
     @Query(
         """
         SELECT categoryId, SUM(amount) AS total FROM transactions
         WHERE type = :type AND dateMillis BETWEEN :startMillis AND :endMillis
+          AND (:expenseType IS NULL OR expenseType = :expenseType)
         GROUP BY categoryId
         """,
     )
@@ -89,30 +117,36 @@ interface TransactionDao {
         type: TransactionType,
         startMillis: Long,
         endMillis: Long,
+        expenseType: ExpenseType?,
     ): List<CategorySum>
 
-    /** Per-month totals (device local time) from [startMillis] onwards, used for trend charts. */
+    /** Per-month totals (device local time) from [startMillis] onwards, split by type and expense type. */
     @Query(
         """
         SELECT strftime('%Y-%m', dateMillis / 1000, 'unixepoch', 'localtime') AS monthYear,
-               type, SUM(amount) AS total
+               type, expenseType, SUM(amount) AS total
         FROM transactions
         WHERE dateMillis >= :startMillis
-        GROUP BY monthYear, type
+        GROUP BY monthYear, type, expenseType
         ORDER BY monthYear
         """,
     )
     fun observeMonthTotals(startMillis: Long): Flow<List<MonthTypeTotal>>
 
-    /** Per-month, per-category totals for [type] up to [endMillis]; used for savings (sweep) calculation. */
+    /** Per-month, per-category totals for [type] up to [endMillis]. [expenseType] null means all. */
     @Query(
         """
         SELECT strftime('%Y-%m', dateMillis / 1000, 'unixepoch', 'localtime') AS monthYear,
                categoryId, SUM(amount) AS total
         FROM transactions
         WHERE type = :type AND dateMillis <= :endMillis
+          AND (:expenseType IS NULL OR expenseType = :expenseType)
         GROUP BY monthYear, categoryId
         """,
     )
-    fun observeMonthCategoryTotals(type: TransactionType, endMillis: Long): Flow<List<MonthCategorySum>>
+    fun observeMonthCategoryTotals(
+        type: TransactionType,
+        endMillis: Long,
+        expenseType: ExpenseType?,
+    ): Flow<List<MonthCategorySum>>
 }

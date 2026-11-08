@@ -1,5 +1,6 @@
 package com.example.dhansutra.ui.dashboard
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,13 +10,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.dhansutra.domain.model.BudgetItem
 import com.example.dhansutra.domain.model.Category
 import com.example.dhansutra.domain.model.DashboardSummary
+import com.example.dhansutra.domain.model.PeriodicExpenseItem
+import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.RolloverType
 import com.example.dhansutra.ui.appViewModel
 import com.example.dhansutra.ui.components.BudgetProgressBar
@@ -38,7 +49,9 @@ import kotlin.math.roundToInt
 
 @Composable
 fun DashboardRoute() {
-    val vm = appViewModel { DashboardViewModel(it.observeDashboardSummary, it.observeMonthlyBudget, it.settingsRepository) }
+    val vm = appViewModel {
+        DashboardViewModel(it.observeDashboardSummary, it.observeMonthlyBudget, it.observePeriodicExpenses, it.settingsRepository)
+    }
     val state by vm.uiState.collectAsStateWithLifecycle()
     DashboardScreen(state, vm::setRolloverEnabled)
 }
@@ -53,9 +66,10 @@ fun DashboardScreen(state: DashboardUiState, onRolloverToggle: (Boolean) -> Unit
         item {
             Text(MonthYear.label(state.month), style = MaterialTheme.typography.headlineSmall)
         }
+        item { CashBalanceCard(state.summary.cashBalance) }
         item { SummaryCards(state.summary) }
         item {
-            Text("Budget vs actual", style = MaterialTheme.typography.titleMedium)
+            Text("Operating budget (regular expenses)", style = MaterialTheme.typography.titleMedium)
         }
         if (state.budgets.isEmpty()) {
             item {
@@ -67,7 +81,83 @@ fun DashboardScreen(state: DashboardUiState, onRolloverToggle: (Boolean) -> Unit
             }
         }
         items(state.budgets.size) { index -> CategoryProgress(state.budgets[index]) }
+        if (state.periodic.items.isNotEmpty()) {
+            item { PeriodicExpensesCard(state.periodic) }
+        }
         item { RolloverCard(state, onRolloverToggle) }
+    }
+}
+
+/** Header card: real bank balance (all income minus ALL expenses, periodic included). */
+@Composable
+private fun CashBalanceCard(cashBalance: Long) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("True cash balance", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(
+                CurrencyFormatter.format(cashBalance),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (cashBalance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer,
+                maxLines = 1,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                "Includes periodic payments",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
+/** Collapsible list of periodic lump-sum payments made this month, each with a duration badge. */
+@Composable
+private fun PeriodicExpensesCard(periodic: PeriodicExpenseSummary) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Periodic / one-time expenses", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${CurrencyFormatter.format(periodic.total, false)} paid this month" +
+                            " · ≈ ${CurrencyFormatter.format(periodic.monthlyEquivalent, false)}/month",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                )
+            }
+            if (expanded) {
+                periodic.items.forEach { PeriodicExpenseRow(it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PeriodicExpenseRow(item: PeriodicExpenseItem) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        CategoryIcon(item.categoryIcon, Modifier.size(20.dp))
+        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Text(item.notes.ifBlank { item.categoryName }, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Text(
+                "≈ ${CurrencyFormatter.format(item.monthlyEquivalent, false)}/month",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        AssistChip(
+            onClick = {},
+            label = {
+                Text("${CurrencyFormatter.format(item.amount, false)} • Covers ${item.coveredMonths} Month" +
+                    if (item.coveredMonths == 1) "" else "s")
+            },
+        )
     }
 }
 
@@ -76,7 +166,7 @@ private fun SummaryCards(summary: DashboardSummary) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatCard("Monthly income", CurrencyFormatter.format(summary.income), Modifier.weight(1f))
-            StatCard("Spent so far", CurrencyFormatter.format(summary.spent), Modifier.weight(1f))
+            StatCard("Regular spent", CurrencyFormatter.format(summary.spent), Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatCard(
@@ -170,7 +260,19 @@ private fun cat(id: Long, name: String, icon: String, type: RolloverType) = Cate
 
 private val previewState = DashboardUiState(
     month = YearMonth.of(2026, 11),
-    summary = DashboardSummary(income = 8_500_000, spent = 3_270_000, surplus = 5_230_000, savings = 12_345_600),
+    summary = DashboardSummary(
+        income = 8_500_000,
+        spent = 3_270_000,
+        surplus = 4_030_000,
+        savings = 12_345_600,
+        periodicSpent = 1_200_000,
+        cashBalance = 16_375_600,
+    ),
+    periodic = PeriodicExpenseSummary(
+        total = 1_200_000,
+        monthlyEquivalent = 200_000,
+        items = listOf(PeriodicExpenseItem(1, "Shopping", "shopping_bag", "Gym membership", 0L, 1_200_000, 6)),
+    ),
     budgets = listOf(
         BudgetItem(cat(1, "Rent/EMI", "home", RolloverType.CARRY_FORWARD), 1_500_000, 0, 1_500_000),
         BudgetItem(cat(2, "Groceries", "shopping_cart", RolloverType.CARRY_FORWARD), 800_000, 120_000, 650_000),

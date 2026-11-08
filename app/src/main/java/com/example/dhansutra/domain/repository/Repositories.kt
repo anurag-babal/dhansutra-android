@@ -2,8 +2,10 @@ package com.example.dhansutra.domain.repository
 
 import com.example.dhansutra.domain.model.BudgetEntry
 import com.example.dhansutra.domain.model.Category
+import com.example.dhansutra.domain.model.ExpenseType
 import com.example.dhansutra.domain.model.MonthCategorySpend
 import com.example.dhansutra.domain.model.MonthTotals
+import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.model.Transaction
 import com.example.dhansutra.domain.model.TransactionFilter
 import com.example.dhansutra.domain.model.TransactionItem
@@ -27,15 +29,50 @@ interface TransactionRepository {
     suspend fun save(transaction: Transaction): Long
     suspend fun delete(id: Long)
 
-    fun observeTotal(type: TransactionType, startMillis: Long, endMillis: Long): Flow<Long>
-    suspend fun getTotal(type: TransactionType, startMillis: Long, endMillis: Long): Long
+    /** Total for [type] in the range. [expenseType] null = all expense types (real cash view). */
+    fun observeTotal(
+        type: TransactionType,
+        startMillis: Long,
+        endMillis: Long,
+        expenseType: ExpenseType? = null,
+    ): Flow<Long>
 
-    /** categoryId -> total, for [type] in the range. */
-    fun observeTotalsByCategory(type: TransactionType, startMillis: Long, endMillis: Long): Flow<Map<Long, Long>>
-    suspend fun getTotalsByCategory(type: TransactionType, startMillis: Long, endMillis: Long): Map<Long, Long>
+    suspend fun getTotal(
+        type: TransactionType,
+        startMillis: Long,
+        endMillis: Long,
+        expenseType: ExpenseType? = null,
+    ): Long
 
+    /** categoryId -> total, for [type] in the range. [expenseType] null = all expense types. */
+    fun observeTotalsByCategory(
+        type: TransactionType,
+        startMillis: Long,
+        endMillis: Long,
+        expenseType: ExpenseType? = null,
+    ): Flow<Map<Long, Long>>
+
+    suspend fun getTotalsByCategory(
+        type: TransactionType,
+        startMillis: Long,
+        endMillis: Long,
+        expenseType: ExpenseType? = null,
+    ): Map<Long, Long>
+
+    /** Per-month income / all expenses / periodic expenses. */
     fun observeMonthTotals(startMillis: Long): Flow<List<MonthTotals>>
-    fun observeMonthCategoryExpenses(endMillis: Long): Flow<List<MonthCategorySpend>>
+
+    /** Per-month, per-category expenses. [expenseType] null = all expense types. */
+    fun observeMonthCategoryExpenses(
+        endMillis: Long,
+        expenseType: ExpenseType? = null,
+    ): Flow<List<MonthCategorySpend>>
+
+    /** Real cash balance: all-time income minus ALL expenses (regular + periodic). */
+    fun observeCashBalance(): Flow<Long>
+
+    /** Periodic / one-time expenses paid in the range, with their total and average monthly equivalent. */
+    fun observePeriodicExpenses(startMillis: Long, endMillis: Long): Flow<PeriodicExpenseSummary>
 }
 
 interface BudgetRepository {

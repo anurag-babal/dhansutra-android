@@ -18,7 +18,16 @@ data class Transaction(
     val dateMillis: Long,
     val type: TransactionType,
     val notes: String = "",
-)
+    /** Only meaningful for expenses; income is always [ExpenseType.REGULAR_OPERATING]. */
+    val expenseType: ExpenseType = ExpenseType.REGULAR_OPERATING,
+    /** Months of usage the (lump-sum) [amount] covers: 1 for regular, 3/6/12 for periodic. */
+    val coveredMonths: Int = 1,
+) {
+    val isPeriodic: Boolean get() = expenseType == ExpenseType.PERIODIC_ONE_TIME
+
+    /** Informational average monthly cost of this payment (paise). */
+    val monthlyEquivalent: Long get() = amount / coveredMonths.coerceAtLeast(1)
+}
 
 /** A transaction joined with display info of its category. */
 data class TransactionItem(
@@ -61,10 +70,36 @@ data class BudgetItem(
 
 data class DashboardSummary(
     val income: Long,
+    /** Regular operating expenses of the month (what budgets are measured against). */
     val spent: Long,
-    /** income - spent for the month. */
+    /** income - spent - periodicSpent for the month (true cash movement). */
     val surplus: Long,
     val savings: Long,
+    /** Periodic / one-time lump-sum expenses paid in the month. */
+    val periodicSpent: Long = 0,
+    /** All-time income minus ALL expenses (regular + periodic): matches the real bank balance. */
+    val cashBalance: Long = 0,
+)
+
+/** One periodic lump-sum payment, for the dashboard breakdown. */
+data class PeriodicExpenseItem(
+    val id: Long,
+    val categoryName: String,
+    val categoryIcon: String,
+    val notes: String,
+    val dateMillis: Long,
+    val amount: Long,
+    val coveredMonths: Int,
+) {
+    val monthlyEquivalent: Long get() = amount / coveredMonths.coerceAtLeast(1)
+}
+
+/** Periodic expenses paid in one month: lump-sum total plus its average monthly equivalent. */
+data class PeriodicExpenseSummary(
+    val total: Long = 0,
+    /** Sum of amount / coveredMonths; informational only. */
+    val monthlyEquivalent: Long = 0,
+    val items: List<PeriodicExpenseItem> = emptyList(),
 )
 
 data class CategoryBreakdown(
@@ -81,9 +116,15 @@ data class MonthlyTrendPoint(
 
 data class MonthTotals(
     val monthYear: String,
+    /** ALL expenses of the month (regular + periodic). */
     val spent: Long,
     val income: Long,
-)
+    /** The periodic part of [spent]. */
+    val periodicSpent: Long = 0,
+) {
+    /** Regular operating spend only; used for spending trends. */
+    val operatingSpent: Long get() = spent - periodicSpent
+}
 
 data class MonthCategorySpend(
     val monthYear: String,

@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.dhansutra.domain.model.BudgetItem
 import com.example.dhansutra.domain.model.DashboardSummary
+import com.example.dhansutra.domain.model.PeriodicExpenseSummary
 import com.example.dhansutra.domain.repository.SettingsRepository
 import com.example.dhansutra.domain.usecase.ObserveDashboardSummary
 import com.example.dhansutra.domain.usecase.ObserveMonthlyBudget
+import com.example.dhansutra.domain.usecase.ObservePeriodicExpenses
 import com.example.dhansutra.util.MonthYear
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +20,8 @@ data class DashboardUiState(
     val month: YearMonth = MonthYear.current(),
     val summary: DashboardSummary = DashboardSummary(0, 0, 0, 0),
     val budgets: List<BudgetItem> = emptyList(),
+    /** Periodic / one-time lump-sum payments made this month (kept out of [budgets]). */
+    val periodic: PeriodicExpenseSummary = PeriodicExpenseSummary(),
     val rolloverEnabled: Boolean = true,
     val isLoading: Boolean = true,
 ) {
@@ -28,6 +32,7 @@ data class DashboardUiState(
 class DashboardViewModel(
     observeSummary: ObserveDashboardSummary,
     observeBudget: ObserveMonthlyBudget,
+    observePeriodic: ObservePeriodicExpenses,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
@@ -36,11 +41,12 @@ class DashboardViewModel(
     val uiState: StateFlow<DashboardUiState> = combine(
         observeSummary(month),
         observeBudget(month),
+        observePeriodic(month),
         settingsRepository.rolloverEnabled,
-    ) { summary, budgets, enabled ->
+    ) { summary, budgets, periodic, enabled ->
         // Hide categories with no budget and no activity (e.g. the income category) from the progress list.
         val visible = budgets.filter { it.available != 0L || it.spent != 0L }
-        DashboardUiState(month, summary, visible, enabled, isLoading = false)
+        DashboardUiState(month, summary, visible, periodic, enabled, isLoading = false)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState(month))
 
     fun setRolloverEnabled(enabled: Boolean) = settingsRepository.setRolloverEnabled(enabled)
