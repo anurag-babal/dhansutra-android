@@ -134,7 +134,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 6 – Monthly Planning Tab
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (Notes: table shows base Budget | Spent | Left (= budget + carried over - spent) | Rollover badge with carried amount; tap row to edit budget for the selected month / rollover type / icon / name / optional "use as default"; FAB adds a category; delete is blocked when the category has transactions. Saves call `rolloverManager.recalculate()`.)
 - **Intent:** Let the user allocate budgets and choose rollover mode per category (PROMPT deliverable #4: Monthly Budget View).
 - **Expected Outcomes:** Table-style view with Category | Allocated | Spent | Remaining | Rollover Status for the selected month; edit allocation and rollover mode; add/edit/remove categories.
 - **Todo List:**
