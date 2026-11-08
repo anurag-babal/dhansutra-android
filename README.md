@@ -18,7 +18,8 @@ MVVM + Clean Architecture with manual dependency injection.
 ## Rollover & savings rules
 
 * Month keys are `yyyy-MM`; the month is taken in the device time zone.
-* A budget row exists per (month, category) for **every** category, from the first month with any activity (a budget row, an expense or an income entry) up to the current month. Missing rows are created from the category's default budget by `RolloverManager`, which re-runs whenever categories, transactions or the rollover setting change. It is idempotent.
+* Each category has a budget row for every month from **its own** first month (the earliest of its budget rows and its expenses, otherwise the current month) up to the current month, including months with no spending. A category created in November therefore has no October row. Missing rows are created from the category's default budget by `RolloverManager`, which re-runs whenever categories, transactions or the rollover setting change. It is idempotent.
+* The Planning and Dashboard budget lists hide categories that have no budget, no carry-over and no spending in the month (e.g. "Salary & Income").
 * **Carry Forward:** next month's `carriedOverAmount` = this month's `allocated + carriedOver - spent` (positive or negative).
 * **Sweep to Savings:** next month starts fresh (carry-over 0); a leftover is dropped and an overspend is forgiven.
 * **Rollover switch off:** every carry-over is 0.

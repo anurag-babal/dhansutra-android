@@ -204,4 +204,4 @@ Phase 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 (each phase is independe
 
 ## Post-delivery change: simplified savings & rollover rows
 - Total savings is now simply income - expenses of closed months (no swept-surplus term, which double counted unspent budget). Sweep only resets the next month's budget.
-- Every category now gets a budget row for every month from the first month with any activity (budget row, expense or income), so unused budgets carry/sweep correctly. Side effect: zero-budget categories such as "Salary & Income" show a Rs 0 row on the Planning tab.
+- Each category gets budget rows from ITS OWN first month (earliest of its budget rows and its expenses, else the current month) through the current month, so unused budgets still carry/sweep but a category created in November gets no October row. Categories with no budget, carry-over or spending in a month are hidden from the Planning/Dashboard lists (e.g. "Salary & Income").

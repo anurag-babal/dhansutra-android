@@ -23,9 +23,8 @@ class RolloverCalculatorTest {
         categories: List<Category>,
         existing: List<BudgetEntry> = emptyList(),
         spend: List<MonthCategorySpend> = emptyList(),
-        totals: List<MonthTotals> = emptyList(),
         enabled: Boolean = true,
-    ) = RolloverCalculator.computeBudgets(categories, existing, spend, totals, enabled, nov)
+    ) = RolloverCalculator.computeBudgets(categories, existing, spend, enabled, nov)
 
     @Test
     fun carryForwardPositiveAndNegative() {
@@ -49,19 +48,23 @@ class RolloverCalculatorTest {
     }
 
     @Test
-    fun categoryWithoutSpendingStillGetsRowsAndCarriesItsFullBudget() {
-        // Only Groceries was spent on in October; Utilities-like carry category must still roll over.
-        val unused = Category(3, "Utilities", "bolt", 300, RolloverType.CARRY_FORWARD)
-        val rows = budgets(listOf(carry, unused), spend = listOf(spend("2026-10", 1, 100)))
+    fun existingCategoryWithNoSpendingStillCarriesItsFullBudget() {
+        // Utilities already had an October budget row but nothing was spent: its whole budget carries into November.
+        val utilities = Category(3, "Utilities", "bolt", 300, RolloverType.CARRY_FORWARD)
+        val existing = listOf(BudgetEntry(5, "2026-10", 3, 300, 0))
+        val rows = budgets(listOf(carry, utilities), existing, spend = listOf(spend("2026-10", 1, 100)))
         assertEquals(listOf("2026-10", "2026-11"), rows.filter { it.categoryId == 3L }.map { it.monthYear })
         assertEquals(300L, rows.carried(3, "2026-11"))
     }
 
     @Test
-    fun incomeOnlyMonthStartsBudgetRows() {
-        val rows = budgets(listOf(carry), totals = listOf(MonthTotals("2026-10", 0, 5000)))
-        assertEquals(listOf("2026-10", "2026-11"), rows.map { it.monthYear })
-        assertEquals(1000L, rows.carried(1, "2026-11"))
+    fun categoryCreatedThisMonthHasNoEarlierRowsAndNoCarryOver() {
+        // Groceries has October spending; the brand-new Gym category must not get an October row.
+        val gym = Category(4, "Gym", "fitness", 500, RolloverType.CARRY_FORWARD)
+        val rows = budgets(listOf(carry, gym), spend = listOf(spend("2026-10", 1, 100)))
+        assertEquals(listOf("2026-11"), rows.filter { it.categoryId == 4L }.map { it.monthYear })
+        assertEquals(0L, rows.carried(4, "2026-11"))
+        assertEquals(listOf("2026-10", "2026-11"), rows.filter { it.categoryId == 1L }.map { it.monthYear })
     }
 
     @Test

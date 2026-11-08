@@ -41,6 +41,8 @@ class ObserveMonthlyBudget(
                 BudgetItem(cat, row?.allocatedAmount ?: cat.defaultBudget, row?.carriedOverAmount ?: 0L, spentAmount)
             }
         }
+            // Hide categories with no budget, no carry-over and no spending (e.g. "Salary & Income").
+            .filter { it.allocated != 0L || it.carriedOver != 0L || it.spent != 0L }
     }
 }
 
