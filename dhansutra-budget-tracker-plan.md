@@ -64,7 +64,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 2 – Data Layer (Room)
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (DAO tests written in `app/src/androidTest/.../data/DaoTest.kt`; compiled but not run - needs device. Money is stored in paise; seed categories inserted via raw SQL in `SeedCallback`.)
 - **Intent:** Deliver production-ready persistence (PROMPT deliverable #2).
 - **Expected Outcomes:** Entities, enums, type converters, DAOs, and `AppDatabase` compile; DAO tests pass on an in-memory DB; default categories seeded on first launch.
 - **Todo List:**
