@@ -103,7 +103,7 @@ util/ (CurrencyFormatter, MonthYear helpers)
 
 ## Phase 4 – Theme, Navigation Shell & Shared Components
 
-- **Status:** `[ ] pending`
+- **Status:** `[x] done` (Notes: existing theme already supports dynamic color + dark/light. Each tab is `ui/<tab>/<Tab>Route.kt` (placeholders to be replaced); get ViewModels with `appViewModel { container -> ... }` from `ui/AppViewModelFactory.kt`; shared: `MonthSelector`, `BudgetProgressBar`, `EmptyState`, `CategoryIcon`/`CategoryIcons.all` (icon names match seeded categories). The FAB lives inside the Transactions screen itself, since the bottom-nav Scaffold has no FAB.)
 - **Intent:** Provide the app frame: Material 3 theming with dynamic color and the 4-tab bottom navigation.
 - **Expected Outcomes:** App launches to a bottom-nav scaffold with Dashboard, Planning, Transactions, Analytics tabs (placeholder content); dynamic color and dark/light work; a ViewModel factory pattern is in place.
 - **Todo List:**
